@@ -39,109 +39,57 @@ internal static unsafe class BitBool
         array[index >> 5] ^= (byte)BitBool.bitMask32[index & 0x0000001F];
 
     public static int BitsTableSize(int length, int bitsLength) => (length * bitsLength + 31) >> 5;
-    public static void SetBitsAtPos(uint[] bitsTable, uint bitIndex, uint bitsString, uint stringLength)
-    {
-        var wordIdx = bitIndex >> 5;
-        var offset1 = bitIndex & 0x1f;
-        var offset2 = 0x20 - offset1;
-        var stringMask = (uint)((1 << (int)stringLength) - 1);
-        //bitsTable[wordIdx] &= ~(stringMask << (int)shift1);
-        //bitsTable[wordIdx] |= bitsString << (int)shift1;
 
-        bitsTable[wordIdx] = bitsTable[wordIdx] & ~(stringMask << (int)offset1) | bitsString << (int)offset1;
-
-        if (stringLength > offset2)
-            bitsTable[wordIdx + 1] = bitsTable[wordIdx + 1] & ~(stringMask >> (int)offset2) | bitsString >> (int)offset2;
-        //bitsTable[wordIdx + 1] &= ~(stringMask >> (int)offset2);
-        //bitsTable[wordIdx + 1] |= bitsString >> (int)offset2;
-    }
-    public static void SetBitsAtPos(byte[] bitsTable, uint bitIndex, uint bitsString, uint stringLength)
+    public static void SetBitsValue(uint* bitsTable, uint index, uint bitsString, uint stringLength, uint stringMask)
     {
-        var wordIdx = bitIndex >> 3;
-        var shift1 = bitIndex & 0x7;
-        var shift2 = 0x8 - shift1;
-        var stringMask = (uint)((1 << (int)stringLength) - 1);
-        bitsTable[wordIdx] &= (byte)~(stringMask << (int)shift1);
-        bitsTable[wordIdx] |= (byte)(bitsString << (int)shift1);
+        var bitIndex = index * stringLength;
+        var wordIndex = bitIndex >> 5;
+        var shift1 = (int)bitIndex & 0x1F;
+        var shift2 = 32 - shift1;
+
+        bitsTable[wordIndex] &= ~(stringMask << shift1);
+        bitsTable[wordIndex] |= bitsString << shift1;
+
         if (shift2 >= stringLength)
             return;
-        bitsTable[wordIdx + 1] &= (byte)~(stringMask >> (int)shift2);
-        bitsTable[wordIdx + 1] |= (byte)(bitsString >> (int)shift2);
+        bitsTable[wordIndex + 1] &= ~(stringMask << shift2);
+        bitsTable[wordIndex + 1] |= bitsString << shift2;
+    }
+    public static void SetBitsAtPos(uint* bitsTable, uint bitIndex, uint bitsString, uint stringLength)
+    {
+        var wordIdx = (int)bitIndex >> 5;
+        var shift1 = (int)bitIndex & 0x1F;
+        var shift2 = 32 - shift1;
+        var stringMask = (1u << (int)stringLength) - 1;
+        bitsTable[wordIdx] &= ~(stringMask << shift1);
+        bitsTable[wordIdx] |= bitsString << shift1;
+        if (shift2 >= stringLength)
+            return;
+        bitsTable[wordIdx + 1] &= ~(stringMask >> shift2);
+        bitsTable[wordIdx + 1] |= bitsString >> shift2;
     }
 
     public static uint GetBitsAtPos(uint[] bitsTable, uint pos, uint stringLength)
     {
-        var wordIdx = pos >> 5;
-        var shift1 = pos & 0x1f;
+        var wordIdx = (int)pos >> 5;
+        var shift1 = (int)pos & 0x1f;
         var shift2 = 0x20 - shift1;
         var stringMask = (uint)((1 << (int)stringLength) - 1);
-        var bitsString = bitsTable[wordIdx] >> (int)shift1 & stringMask;
+        var bitsString = bitsTable[wordIdx] >> shift1 & stringMask;
         if (shift2 < stringLength)
-            bitsString |= bitsTable[(int)(wordIdx + 1)] << (int)shift2 & stringMask;
+            bitsString |= bitsTable[wordIdx + 1] << shift2 & stringMask;
         return bitsString;
     }
 
-    public static uint GetBitsAtPos(byte[] bitsTable, uint pos, uint stringLength)
-    {
-        var wordIdx = pos >> 3;
-        var shift1 = pos & 0x7;
-        var shift2 = 0x8 - shift1;
-        var stringMask = (uint)((1 << (int)stringLength) - 1);
-        var bitsString = bitsTable[wordIdx] >> (int)shift1 & stringMask;
-        if (shift2 < stringLength)
-            bitsString |= bitsTable[(int)(wordIdx + 1)] << (int)shift2 & stringMask;
-        return (uint)bitsString;
-    }
-
-    public static void SetBitsAtArray(uint[] bitsTable, uint index, uint bitsString, uint stringLength,
-        uint stringMask)
-    {
-        var bitIndex = index * stringLength;
-        var wordIdx = bitIndex >> 5;
-        var offset1 = bitIndex & 0x1f;
-        var offset2 = 0x20 - offset1;
-
-        bitsTable[wordIdx] = bitsTable[wordIdx] & ~(stringMask << (int)offset1) | bitsString << (int)offset1;
-        if (stringLength > offset2)
-            bitsTable[wordIdx + 1] = bitsTable[wordIdx + 1] & ~(stringMask >> (int)offset2) | bitsString >> (int)offset2;
-    }
-
-    public static void SetBitsAtArray(byte[] bitsTable, uint index, uint bitsString, uint stringLength,
-        uint stringMask)
-    {
-        var bitIndex = index * stringLength;
-        var wordIdx = bitIndex >> 3;
-        var shift1 = bitIndex & 0x7;
-        var shift2 = 0x8 - shift1;
-        bitsTable[wordIdx] &= (byte)~(stringMask << (int)shift1);
-        bitsTable[wordIdx] |= (byte)(bitsString << (int)shift1);
-        if (shift2 >= stringLength)
-            return;
-        bitsTable[wordIdx + 1] &= (byte)~(stringMask >> (int)shift2);
-        bitsTable[wordIdx + 1] |= (byte)(bitsString >> (int)shift2);
-    }
-
-    public static uint GetBitsValue(uint[] bitsTable, uint index, uint stringLength, uint stringMask)
+    public static uint GetBitsValue(uint* bitsTable, uint index, uint stringLength, uint stringMask)
     {
         var bitIdx = index * stringLength;
-        var wordIdx = bitIdx >> 5;
-        var shift1 = bitIdx & 0x1f;
-        var shift2 = 0x20 - shift1;
-        var bitsString = bitsTable[wordIdx] >> (int)shift1 & stringMask;
+        var wordIdx = (int)bitIdx >> 5;
+        var shift1 = (int)bitIdx & 0x1F;
+        var shift2 = 32 - shift1;
+        var bitsString = bitsTable[wordIdx] >> shift1 & stringMask;
         if (shift2 < stringLength)
-            bitsString |= bitsTable[(int)(wordIdx + 1)] << (int)shift2 & stringMask;
+            bitsString |= bitsTable[wordIdx + 1] << shift2 & stringMask;
         return bitsString;
-    }
-
-    public static uint GetBitsValue(byte[] bitsTable, uint index, uint stringLength, uint stringMask)
-    {
-        var bitIdx = index * stringLength;
-        var wordIdx = bitIdx >> 3;
-        var shift1 = bitIdx & 0x7;
-        var shift2 = 0x8 - shift1;
-        var bitsString = bitsTable[wordIdx] >> (int)shift1 & stringMask;
-        if (shift2 < stringLength)
-            bitsString |= bitsTable[(int)(wordIdx + 1)] << (int)shift2 & stringMask;
-        return (uint)bitsString;
     }
 }
