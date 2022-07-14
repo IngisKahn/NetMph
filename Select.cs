@@ -22,14 +22,16 @@ public sealed unsafe class Select : IDisposable
             Select.rankLookupTable[i] = (byte)CountSetBitsInByte((uint)i);
         Select.highBitRanks = (byte*)NativeMemory.Alloc(256 * 8);
         var pHighRanks = Select.highBitRanks;
+        var bbb = pHighRanks;
         for (var i = 0; i < 256; i++)
         {
             var z = 0;
             for (var j = 0; j < 8; j++)
-            {
                 if ((i & (1 << j)) != 0)
-                    *pHighRanks++ = (byte)z++;
-            }
+                {
+                    *pHighRanks++ = (byte) j;
+                    z++;
+                }
             while (z++ < 8)
                 *pHighRanks++ = 255;
         }
@@ -79,18 +81,18 @@ public sealed unsafe class Select : IDisposable
 
     ~Select() => this.Dispose(false);
 
-    public Select(uint[] keys, uint maxValue)
+    public Select(uint[] keys)
     {
         uint buffer = 0;
         this.keyCount = (uint)keys.Length;
-        this.maxValue = maxValue;
+        this.maxValue = keys[^1];
         var nbits = keyCount + maxValue;
         var flagsSize = nbits + 0x1f >> 5;
         var skipTableSize = (keyCount >> Select.stepSelectTableBitCount) + 1;
         this.valuePresentFlags = (uint*)NativeMemory.Alloc(flagsSize, sizeof(uint));
         this.valueSkipTable = (uint*)NativeMemory.Alloc(skipTableSize, sizeof(uint));
 
-        int SetFlags(uint[] keys, uint maxValue)
+        int SetFlags()
         {
             var flagIndex = 0;
             for (int currentValue = 0, keyIndex = 0; ;)
@@ -125,7 +127,7 @@ public sealed unsafe class Select : IDisposable
             return flagIndex;
         }
 
-        var flagIndex = SetFlags(keys, maxValue);
+        var flagIndex = SetFlags();
 
         if ((flagIndex & 0x1f) != 0)
         {
@@ -159,17 +161,20 @@ public sealed unsafe class Select : IDisposable
     private static uint Query(uint* presentTable, uint* skipTable, uint targetIndex)
     {
         uint lastPartSum;
+        var bitTable = (byte*)presentTable;
         var bitIndex = skipTable[targetIndex >> stepSelectTableBitCount];
         var byteIndex = bitIndex >> 3;
-        targetIndex &= maskStepSelectTable;
-        targetIndex += rankLookupTable[presentTable[byteIndex] & ((1 << (int)(bitIndex & 7)) - 1)];
+        // starting at byteIndex, bitIndex bits are set; value = (targetIndex & ~maskStepSelectTable) - bitIndex
+        var oneIndex = targetIndex & maskStepSelectTable; // how many bits past the byteIndex to count
+        oneIndex += rankLookupTable[bitTable[byteIndex] & ((1 << (int)(bitIndex & 7)) - 1)];
         uint partSum = 0;
         do
         {
             lastPartSum = partSum;
-            partSum += rankLookupTable[presentTable[byteIndex++]];
-        } while (partSum <= targetIndex);
-        return Select.highBitRanks[presentTable[byteIndex - 1] * 8 + targetIndex - lastPartSum] + (byteIndex - 1 << 3);
+            partSum += rankLookupTable[bitTable[byteIndex++]];
+        } while (partSum <= oneIndex);
+
+        return Select.highBitRanks[bitTable[byteIndex - 1] * 8 + oneIndex - lastPartSum] + (byteIndex - 1 << 3) - targetIndex;
     }
 
     public uint Query(uint targetIndex) => Query(this.valuePresentFlags, this.valueSkipTable, targetIndex);
@@ -177,15 +182,16 @@ public sealed unsafe class Select : IDisposable
     private static uint NextQuery(uint* presentTable, uint bitIndex)
     {
         uint lastPartSum;
+        var bitTable = (byte*)presentTable;
         var byteIndex = bitIndex >> 3;
-        var targetIndex = rankLookupTable[presentTable[byteIndex] & ((1 << (int)(bitIndex & 7)) - 1)] + 1;
+        var targetIndex = rankLookupTable[bitTable[byteIndex] & ((1 << (int)(bitIndex & 7)) - 1)] + 1;
         uint partSum = 0;
         do
         {
             lastPartSum = partSum;
-            partSum += rankLookupTable[presentTable[byteIndex++]];
+            partSum += rankLookupTable[bitTable[byteIndex++]];
         } while (partSum <= targetIndex);
-        return Select.highBitRanks[presentTable[byteIndex - 1] * 8 + targetIndex - lastPartSum] + (byteIndex - 1 << 3);
+        return Select.highBitRanks[bitTable[byteIndex - 1] * 8 + targetIndex - lastPartSum] + (byteIndex - 1 << 3);
     }
 
     public uint NextQuery(uint bitIndex) => NextQuery(this.valuePresentFlags, bitIndex);
