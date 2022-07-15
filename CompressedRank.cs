@@ -98,5 +98,6 @@ public sealed unsafe class CompressedRank : IDisposable
     {
         if (isDisposing)
             this.sel.Dispose();
+        NativeMemory.Free(this.valueRemainders);
     }
 }

@@ -151,17 +151,17 @@ public sealed unsafe class Select : IDisposable
             buffer >>= 0x20 - (flagIndex & 0x1f);
             this.ValuePresentFlags[flagIndex - 1 >> 5] = buffer;
         }
-        this.GenerateSkipTable();
+        this.GenerateSkipTable(keyCount);
     }
 
-    private void GenerateSkipTable()
+    private void GenerateSkipTable(uint keyCount)
     {
         var bitsTable = (byte*)this.ValuePresentFlags;
         var skipTableIndex = 0u;
         var targetValues = 0u;
         var valueArrayIndex = 0u;
         var values = 0u;
-        while (targetValues < this.keyCount)
+        while (targetValues < keyCount)
         {
             uint lastValues;
             do
