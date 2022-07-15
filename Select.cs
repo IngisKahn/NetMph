@@ -1,4 +1,5 @@
-﻿using System.Runtime.InteropServices;
+﻿using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 
 namespace NetMph;
@@ -29,7 +30,7 @@ public sealed unsafe class Select : IDisposable
             for (var j = 0; j < 8; j++)
                 if ((i & (1 << j)) != 0)
                 {
-                    *pHighRanks++ = (byte) j;
+                    *pHighRanks++ = (byte)j;
                     z++;
                 }
             while (z++ < 8)
@@ -51,6 +52,11 @@ public sealed unsafe class Select : IDisposable
             return 2 * sizeof(uint) + vecSize * sizeof(uint) + selTableSize * sizeof(uint);
         }
     }
+
+    /// <summary>
+    /// Each bit represents either to increase the counter "0" or that there exists a value equal to counter "1"
+    /// </summary>
+    public uint* ValuePresentFlags => valuePresentFlags;
 
     private static void Insert0(ref uint buffer) => buffer >>= 1;
 
@@ -75,7 +81,7 @@ public sealed unsafe class Select : IDisposable
 
     private void Dispose(bool isDisposing)
     {
-        NativeMemory.Free(this.valuePresentFlags);
+        NativeMemory.Free(this.ValuePresentFlags);
         NativeMemory.Free(this.valueSkipTable);
     }
 
@@ -83,16 +89,27 @@ public sealed unsafe class Select : IDisposable
 
     public Select(uint[] keys)
     {
+        fixed (uint* pKeys = keys)
+        {
+            this.Generate(pKeys, (uint)keys.Length, out this.maxValue, out this.valuePresentFlags, out this.valueSkipTable);
+        }
+    }
+
+    public Select(uint* keys, uint keyCount) =>
+        this.Generate(keys, keyCount, out this.maxValue, out this.valuePresentFlags, out this.valueSkipTable);
+
+    private void Generate(uint* keys, uint keyCount, out uint maxValue, out uint* valuePresentFlags, out uint* valueSkipTable)
+    {
+
         uint buffer = 0;
-        this.keyCount = (uint)keys.Length;
-        this.maxValue = keys[^1];
+        maxValue = keys[keyCount - 1];
         var nbits = keyCount + maxValue;
         var flagsSize = nbits + 0x1f >> 5;
         var skipTableSize = (keyCount >> Select.stepSelectTableBitCount) + 1;
-        this.valuePresentFlags = (uint*)NativeMemory.Alloc(flagsSize, sizeof(uint));
-        this.valueSkipTable = (uint*)NativeMemory.Alloc(skipTableSize, sizeof(uint));
+        valuePresentFlags = (uint*)NativeMemory.Alloc(flagsSize, sizeof(uint));
+        valueSkipTable = (uint*)NativeMemory.Alloc(skipTableSize, sizeof(uint));
 
-        int SetFlags()
+        int SetFlags(uint max)
         {
             var flagIndex = 0;
             for (int currentValue = 0, keyIndex = 0; ;)
@@ -103,14 +120,14 @@ public sealed unsafe class Select : IDisposable
                     flagIndex++;
 
                     if ((flagIndex & 0x1f) == 0)
-                        this.valuePresentFlags[(flagIndex >> 5) - 1] = buffer; // (idx >> 5) = idx/32
+                        this.ValuePresentFlags[(flagIndex >> 5) - 1] = buffer; // (idx >> 5) = idx/32
                     keyIndex++;
 
                     if (keyIndex == keyCount)
                         return flagIndex;
                 }
 
-                if (currentValue == maxValue)
+                if (currentValue == max)
                     break;
 
                 while (keys[keyIndex] > currentValue)
@@ -119,7 +136,7 @@ public sealed unsafe class Select : IDisposable
                     flagIndex++;
 
                     if ((flagIndex & 0x1f) == 0) // (idx & 0x1f) = idx % 32
-                        this.valuePresentFlags[(flagIndex >> 5) - 1] = buffer; // (idx >> 5) = idx/32
+                        this.ValuePresentFlags[(flagIndex >> 5) - 1] = buffer; // (idx >> 5) = idx/32
                     currentValue++;
                 }
             }
@@ -127,19 +144,19 @@ public sealed unsafe class Select : IDisposable
             return flagIndex;
         }
 
-        var flagIndex = SetFlags();
+        var flagIndex = SetFlags(maxValue);
 
         if ((flagIndex & 0x1f) != 0)
         {
             buffer >>= 0x20 - (flagIndex & 0x1f);
-            this.valuePresentFlags[flagIndex - 1 >> 5] = buffer;
+            this.ValuePresentFlags[flagIndex - 1 >> 5] = buffer;
         }
         this.GenerateSkipTable();
     }
 
     private void GenerateSkipTable()
     {
-        var bitsTable = (byte*)this.valuePresentFlags;
+        var bitsTable = (byte*)this.ValuePresentFlags;
         var skipTableIndex = 0u;
         var targetValues = 0u;
         var valueArrayIndex = 0u;
@@ -177,7 +194,7 @@ public sealed unsafe class Select : IDisposable
         return Select.highBitRanks[bitTable[byteIndex - 1] * 8 + oneIndex - lastPartSum] + (byteIndex - 1 << 3) - targetIndex;
     }
 
-    public uint Query(uint targetIndex) => Query(this.valuePresentFlags, this.valueSkipTable, targetIndex);
+    public uint Query(uint targetIndex) => Query(this.ValuePresentFlags, this.valueSkipTable, targetIndex);
 
     private static uint NextQuery(uint* presentTable, uint bitIndex)
     {
@@ -194,7 +211,7 @@ public sealed unsafe class Select : IDisposable
         return Select.highBitRanks[bitTable[byteIndex - 1] * 8 + targetIndex - lastPartSum] + (byteIndex - 1 << 3);
     }
 
-    public uint NextQuery(uint bitIndex) => NextQuery(this.valuePresentFlags, bitIndex);
+    public uint NextQuery(uint bitIndex) => NextQuery(this.ValuePresentFlags, bitIndex);
 
     public Select(byte* buffer)
     {
@@ -205,7 +222,7 @@ public sealed unsafe class Select : IDisposable
         var selTableSize = (this.keyCount >> 7) + 1;
         this.valuePresentFlags = (uint*)NativeMemory.Alloc(vecSize, sizeof(uint));
         this.valueSkipTable = (uint*)NativeMemory.Alloc(selTableSize, sizeof(uint));
-        Buffer.MemoryCopy(buffer, this.valuePresentFlags, vecSize, vecSize);
+        Buffer.MemoryCopy(buffer, this.ValuePresentFlags, vecSize, vecSize);
         buffer += vecSize * sizeof(uint);
         Buffer.MemoryCopy(buffer, this.valueSkipTable, selTableSize, selTableSize);
     }
@@ -226,7 +243,7 @@ public sealed unsafe class Select : IDisposable
         var nbits = this.keyCount + this.maxValue;
         var vecSize = nbits + 0x1f >> 5;
         var selTableSize = (this.keyCount >> 7) + 1;
-        Buffer.MemoryCopy(this.valuePresentFlags, uintBuffer, bufferLength - 4, vecSize);
+        Buffer.MemoryCopy(this.ValuePresentFlags, uintBuffer, bufferLength - 4, vecSize);
         uintBuffer += vecSize;
         Buffer.MemoryCopy(this.valueSkipTable, uintBuffer, bufferLength - 4 - vecSize, selTableSize);
     }

@@ -8,7 +8,7 @@ public class SelectTests
     [Fact]
     public void T1()
     {
-        Select s = new(
+        using Select s = new(
             new uint[]
             {
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 4, 4,
@@ -21,7 +21,7 @@ public class SelectTests
     [Fact]
     public void Get2()
     {
-        Select s = new(
+        using Select s = new(
             new uint[]
             {
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 4, 4,
@@ -34,7 +34,7 @@ public class SelectTests
     [Fact]
     public void Get3()
     {
-        Select s = new(
+        using Select s = new(
             new uint[]
             {
                     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4,
@@ -52,7 +52,7 @@ public class SelectTests
                 4, 4,
                 4
             };
-        Select s = new(vals);
+        using Select s = new(vals);
 
         for (var i = 0u; i < vals.Length; i++)
         {
@@ -65,7 +65,7 @@ public class SelectTests
     public void GetRange1to50()
     {
         var vals = Enumerable.Range(1, 50).Select(i => (uint)i).ToArray();
-        Select s = new(vals);
+        using Select s = new(vals);
 
         for (var i = 0u; i < vals.Length; i++)
         {
@@ -78,7 +78,7 @@ public class SelectTests
     public void GetRange1to500()
     {
         var vals = Enumerable.Range(1, 500).Select(i => (uint)i).ToArray();
-        Select s = new(vals);
+        using Select s = new(vals);
 
         for (var i = 0u; i < vals.Length; i++)
         //var i = 128u;
