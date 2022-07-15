@@ -28,7 +28,7 @@ public sealed unsafe class CompressedRank : IDisposable
 
     public CompressedRank(IReadOnlyList<uint> values) // must be a sorted list of values
     {
-        this.count = (uint) values.Count;
+        this.count = (uint)values.Count;
         this.maxValue = values[^1];
         this.remainderBitLength = CompressedRank.Log2(this.maxValue / this.count);
         if (this.remainderBitLength == 0)
@@ -38,11 +38,11 @@ public sealed unsafe class CompressedRank : IDisposable
         this.valueRemainders = (uint*)NativeMemory.Alloc(this.BitsTableSize, sizeof(uint));
         var remainderMask = (1u << (int)this.remainderBitLength) - 1u;
         for (var i = 0u; i < this.count; i++)
-            BitBool.SetBitsValue(this.valueRemainders, i, values[(int) i] & remainderMask, (uint) this.remainderBitLength,
+            BitBool.SetBitsValue(this.valueRemainders, i, values[(int)i] & remainderMask, (uint)this.remainderBitLength,
                 remainderMask);
         for (uint currentValue = 1, valueIndex = 0; currentValue <= maxSignificant; currentValue++)
         {
-            while (currentValue > values[(int) valueIndex] >> (int)this.remainderBitLength)
+            while (currentValue > values[(int)valueIndex] >> (int)this.remainderBitLength)
                 valueIndex++;
             selectVector[currentValue - 1] = valueIndex;
         }
@@ -50,40 +50,37 @@ public sealed unsafe class CompressedRank : IDisposable
         this.sel = new(selectVector, this.count);
     }
 
-    public uint this[uint index]
+    public uint GetRank(uint valueIndex)
     {
-        get
+        if (valueIndex > this.maxValue)
+            return this.count;
+
+        var valueSignificant = valueIndex >> (int)this.remainderBitLength;
+        var remainderMask = (1u << (int)this.remainderBitLength) - 1u;
+        var valueRemainder = valueIndex & remainderMask;
+        uint rank, selRes;
+        if (valueSignificant == 0)
         {
-            if (index > this.maxValue)
-                return this.count;
-
-            var valueSignificant = index >> (int)this.remainderBitLength;
-            var remainderMask = (1u << (int)this.remainderBitLength) - 1u;
-            var valueRemainder = index & remainderMask;
-            uint rank, selRes;
-            if (valueSignificant == 0)
-            {
-                selRes = 0;
-                rank = 0;
-            }
-            else
-            {
-                selRes = this.sel.GetBitIndex(valueSignificant - 1) + 1;
-                rank = selRes - valueSignificant;
-            }
-
-            for (;;)
-            {
-                if (BitBool.GetBit32((byte*)this.sel.ValuePresentFlags, (int)selRes) != 0
-                    || BitBool.GetBitsValue(this.valueRemainders, rank, this.remainderBitLength, remainderMask) >=
-                    valueRemainder)
-                    break;
-                selRes++;
-                rank++;
-            }
-
-            return rank;
+            selRes = 0;
+            rank = 0;
         }
+        else
+        {
+            selRes = this.sel.GetBitIndex(valueSignificant - 1) + 1;
+            rank = selRes - valueSignificant;
+        }
+
+        for (; ; )
+        {
+            if (BitBool.GetBit32((byte*)this.sel.ValuePresentFlags, (int)selRes) != 0
+                || BitBool.GetBitsValue(this.valueRemainders, rank, this.remainderBitLength, remainderMask) >=
+                valueRemainder)
+                break;
+            selRes++;
+            rank++;
+        }
+
+        return rank;
     }
 
     ~CompressedRank() => this.Dispose(false);

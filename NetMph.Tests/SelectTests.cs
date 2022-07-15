@@ -15,7 +15,7 @@ public class SelectTests
                 4
             });
         var q = s.GetStoredValue(32);
-        var n = s.NextQuery(33);
+        var n = s.GetNextBitIndex(33);
     }
 
     [Fact]

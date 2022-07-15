@@ -201,7 +201,7 @@ public sealed unsafe class Select : IDisposable
 
     public uint GetBitIndex(uint valueIndex) => GetBitIndex(this.ValuePresentFlags, this.valueSkipTable, valueIndex);
 
-    private static uint NextQuery(uint* presentTable, uint bitIndex)
+    private static uint GetNextBitIndex(uint* presentTable, uint bitIndex)
     {
         uint lastPartSum;
         var bitTable = (byte*)presentTable;
@@ -216,7 +216,7 @@ public sealed unsafe class Select : IDisposable
         return Select.highBitRanks[bitTable[byteIndex - 1] * 8 + targetIndex - lastPartSum] + (byteIndex - 1 << 3);
     }
 
-    public uint NextQuery(uint bitIndex) => NextQuery(this.ValuePresentFlags, bitIndex);
+    public uint GetNextBitIndex(uint bitIndex) => GetNextBitIndex(this.ValuePresentFlags, bitIndex);
 
     public Select(byte* buffer)
     {
@@ -271,6 +271,6 @@ public sealed unsafe class Select : IDisposable
         return Select.GetBitIndex(packedSelect, packedSelect + vecSize, targetIndex);
     }
 
-    public static uint NextQueryPacked(uint* packedSelect, uint bitIndex) =>
-        Select.NextQuery(packedSelect + sizeof(uint) * 2, bitIndex);
+    public static uint GetNextBitIndexPacked(uint* packedSelect, uint bitIndex) =>
+        Select.GetNextBitIndex(packedSelect + sizeof(uint) * 2, bitIndex);
 }
