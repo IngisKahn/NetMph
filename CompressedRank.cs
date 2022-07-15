@@ -33,14 +33,14 @@ public sealed unsafe class CompressedRank : IDisposable
         this.remainderBitLength = CompressedRank.Log2(this.maxValue / this.count);
         if (this.remainderBitLength == 0)
             this.remainderBitLength = 1;
-        var maxRemainder = this.maxValue >> (int)this.remainderBitLength;
-        var selectVector = stackalloc uint[(int)maxRemainder];
+        var maxSignificant = this.maxValue >> (int)this.remainderBitLength;
+        var selectVector = stackalloc uint[(int)maxSignificant];
         this.valueRemainders = (uint*)NativeMemory.Alloc(this.BitsTableSize, sizeof(uint));
         var remainderMask = (1u << (int)this.remainderBitLength) - 1u;
         for (var i = 0u; i < this.count; i++)
             BitBool.SetBitsValue(this.valueRemainders, i, values[(int) i] & remainderMask, (uint) this.remainderBitLength,
                 remainderMask);
-        for (uint currentValue = 1, valueIndex = 0; currentValue <= maxRemainder; currentValue++)
+        for (uint currentValue = 1, valueIndex = 0; currentValue <= maxSignificant; currentValue++)
         {
             while (currentValue > values[(int) valueIndex] >> (int)this.remainderBitLength)
                 valueIndex++;
@@ -68,7 +68,7 @@ public sealed unsafe class CompressedRank : IDisposable
             }
             else
             {
-                selRes = this.sel.Query(valueSignificant - 1) + 1;
+                selRes = this.sel.GetBitIndex(valueSignificant - 1) + 1;
                 rank = selRes - valueSignificant;
             }
 

@@ -175,14 +175,17 @@ public sealed unsafe class Select : IDisposable
         }
     }
 
-    private static uint Query(uint* presentTable, uint* skipTable, uint targetIndex)
+    private static uint GetStoredValue(uint* presentTable, uint* skipTable, uint valueIndex) =>
+        GetBitIndex(presentTable, skipTable, valueIndex) - valueIndex;
+
+    private static uint GetBitIndex(uint* presentTable, uint* skipTable, uint valueIndex)
     {
         uint lastPartSum;
         var bitTable = (byte*)presentTable;
-        var bitIndex = skipTable[targetIndex >> stepSelectTableBitCount];
+        var bitIndex = skipTable[valueIndex >> stepSelectTableBitCount];
         var byteIndex = bitIndex >> 3;
-        // starting at byteIndex, bitIndex bits are set; value = (targetIndex & ~maskStepSelectTable) - bitIndex
-        var oneIndex = targetIndex & maskStepSelectTable; // how many bits past the byteIndex to count
+        // starting at byteIndex, bitIndex bits are set; value = (valueIndex & ~maskStepSelectTable) - bitIndex
+        var oneIndex = valueIndex & maskStepSelectTable; // how many bits past the byteIndex to count
         oneIndex += rankLookupTable[bitTable[byteIndex] & ((1 << (int)(bitIndex & 7)) - 1)];
         uint partSum = 0;
         do
@@ -191,10 +194,12 @@ public sealed unsafe class Select : IDisposable
             partSum += rankLookupTable[bitTable[byteIndex++]];
         } while (partSum <= oneIndex);
 
-        return Select.highBitRanks[bitTable[byteIndex - 1] * 8 + oneIndex - lastPartSum] + (byteIndex - 1 << 3) - targetIndex;
+        return Select.highBitRanks[bitTable[byteIndex - 1] * 8 + oneIndex - lastPartSum] + (byteIndex - 1 << 3);
     }
 
-    public uint Query(uint targetIndex) => Query(this.ValuePresentFlags, this.valueSkipTable, targetIndex);
+    public uint GetStoredValue(uint valueIndex) => GetStoredValue(this.ValuePresentFlags, this.valueSkipTable, valueIndex);
+
+    public uint GetBitIndex(uint valueIndex) => GetBitIndex(this.ValuePresentFlags, this.valueSkipTable, valueIndex);
 
     private static uint NextQuery(uint* presentTable, uint bitIndex)
     {
@@ -248,13 +253,22 @@ public sealed unsafe class Select : IDisposable
         Buffer.MemoryCopy(this.valueSkipTable, uintBuffer, bufferLength - 4 - vecSize, selTableSize);
     }
 
-    public static uint QueryPacked(uint* packedSelect, uint targetIndex)
+    public static uint GetStoredValuePacked(uint* packedSelect, uint targetIndex)
     {
         var keyCount = *packedSelect++;
         var maxValue = *packedSelect++;
         var nbits = keyCount + maxValue;
         var vecSize = nbits + 0x1f >> 5;
-        return Select.Query(packedSelect, packedSelect + vecSize, targetIndex);
+        return Select.GetStoredValue(packedSelect, packedSelect + vecSize, targetIndex);
+    }
+
+    public static uint GetBitIndexPacked(uint* packedSelect, uint targetIndex)
+    {
+        var keyCount = *packedSelect++;
+        var maxValue = *packedSelect++;
+        var nbits = keyCount + maxValue;
+        var vecSize = nbits + 0x1f >> 5;
+        return Select.GetBitIndex(packedSelect, packedSelect + vecSize, targetIndex);
     }
 
     public static uint NextQueryPacked(uint* packedSelect, uint bitIndex) =>
