@@ -69,7 +69,7 @@ internal static unsafe class BitBool
         bitsTable[wordIdx + 1] |= bitsString >> shift2;
     }
 
-    public static uint GetBitsAtPos(uint[] bitsTable, uint pos, uint stringLength)
+    public static uint GetBitsAtPos(uint* bitsTable, uint pos, uint stringLength)
     {
         var wordIdx = (int)pos >> 5;
         var shift1 = (int)pos & 0x1f;
