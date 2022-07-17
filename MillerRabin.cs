@@ -24,17 +24,17 @@ internal static class MillerRabin
             s++;
             d >>= 1;
         } while ((d & 1) == 0);
-        var vals = new ulong[] { 2, 7, 61 };
+        Span<ulong> vals = stackalloc ulong[] { 2, 7, 61 };
         foreach (var t in vals)
         {
             var a = Math.Min(n - 2, t);
-            var now = BigInteger.ModPow(a, d, n); // pow(a, d, n);
+            var now = PowCore(d, n, a);// BigInteger.ModPow(a, d, n); // pow(a, d, n);
             if (now == 1 || now == n - 1)
                 continue;
             ulong j;
             for (j = 1u; j < s; j++)
             {
-                now = BigInteger.ModPow(now, 2, n); //.) = mul(now, now, n);
+                now = Pow2Core(n, now);// BigInteger.ModPow(now, 2, n); //.) = mul(now, now, n);
                 if (now == n - 1)
                     break;
             }
@@ -43,4 +43,21 @@ internal static class MillerRabin
         }
         return true;
     }
+    private static uint PowCore(uint power, uint modulus, ulong value)
+    {
+        // The 32-bit modulus pow algorithm for the last or
+        // the only power limb using square-and-multiply.
+        var result = 1ul;
+        while (power != 0)
+        {
+            if ((power & 1) == 1)
+                result = result * value % modulus;
+            if (power != 1)
+                value = value * value % modulus;
+            power >>= 1;
+        }
+
+        return (uint)(result % modulus);
+    }
+    private static uint Pow2Core(uint modulus, ulong value) => (uint)(value * value % modulus);
 }
