@@ -17,13 +17,13 @@ public unsafe class CompressedSequence : IDisposable
     public uint Size => this.selectTable.Size +
                         (((this.totalBitLength + 31) >> 5) * sizeof(uint)
                         + this.BitsTableSize * sizeof(uint)
-                        + 4 * sizeof(uint)) * 8u;
+                        + 3 * sizeof(uint));
 
     private static uint Log2(uint x)
     {
-        var isPowerOf2 = x & x - 1;
-        isPowerOf2 |= ~isPowerOf2 + 1;
-        isPowerOf2 >>= 31;
+        //var isPowerOf2 = x & x - 1;
+        //isPowerOf2 |= ~isPowerOf2 + 1;
+        //isPowerOf2 >>= 31;
         x |= x >> 1;
         x |= x >> 2;
         x |= x >> 4;
@@ -31,11 +31,10 @@ public unsafe class CompressedSequence : IDisposable
         x |= x >> 16;
         x -= x >> 1 & 0x55555555;
         x = (x & 0x33333333) + (x >> 2 & 0x33333333);
-        return ((x + (x >> 4) & 0x0F0F0F0F) * 0x01010101 >> 24) - 1 + isPowerOf2;
+        return ((x + (x >> 4) & 0x0F0F0F0F) * 0x01010101 >> 24);// - 1 + isPowerOf2;
     }
 
     private uint StoreTableSize => (this.totalBitLength + 31) >> 5;
-    private uint EncodedTableSize => (this.valueCount * this.remainderLength + 0x1f) >> 5;
 
     private void Dispose(bool isDisposing)
     {
@@ -58,59 +57,82 @@ public unsafe class CompressedSequence : IDisposable
         uint i;
         this.valueCount = (uint)valsTable.Length;
         // lengths: represents lengths of encoded values	
-        var bitLengths = stackalloc uint[(int)this.valueCount];
+        var bitLengths = (uint*)NativeMemory.Alloc(this.valueCount, sizeof(uint));
+        try
+        {
 
-        this.totalBitLength = 0u;
+            this.totalBitLength = 0u;
+            // store length in bitLengths, length - 1 added to total (first bit is always 1)
+            for (i = 0; i < this.valueCount; i++)
+                if (valsTable[i] == 0)
+                    bitLengths[i] = 0;
+                else
+                {
+                    bitLengths[i] = CompressedSequence.Log2(valsTable[i]);
+                    this.totalBitLength += bitLengths[i] - 1;
+                }
 
-        for (i = 0; i < this.valueCount; i++)
-            if (valsTable[i] == 0)
-                bitLengths[i] = 0;
-            else
+            // 32 bits per record
+            this.storeTable = (uint*)NativeMemory.Alloc(this.StoreTableSize, sizeof(uint));
+            var bitPosition = 0u;
+
+            for (i = 0; i < this.valueCount; i++)
             {
-                bitLengths[i] = CompressedSequence.Log2(valsTable[i] + 1);
-                this.totalBitLength += bitLengths[i];
+                if (valsTable[i] <= 1)
+                    continue;
+                // remove msb
+                var storedValue = valsTable[i] - ((1u << (int)bitLengths[i] - 1) - 0u);
+                BitBool.SetBitsAtPos(this.storeTable, bitPosition, storedValue, bitLengths[i] - 1);
+
+                Console.Write($"{bitPosition},{storedValue:X},{bitLengths[i] - 1} ");
+
+                bitPosition += bitLengths[i] - 1;
             }
+            Console.WriteLine();
 
-        // 32 bits per record
-        this.storeTable = (uint*)NativeMemory.Alloc(this.StoreTableSize, sizeof(uint));
-        var bitPosition = 0u;
+            if (bitPosition > this.valueCount)
+            {
+                this.remainderLength = CompressedSequence.Log2((bitPosition + this.valueCount) / this.valueCount) - 1;
 
-        for (i = 0; i < this.valueCount; i++)
-        {
-            if (valsTable[i] == 0)
-                continue;
-            var storedValue = valsTable[i] - ((1u << (int)bitLengths[i]) - 1u);
-            BitBool.SetBitsAtPos(this.storeTable, bitPosition, storedValue, bitLengths[i]);
-            bitPosition += bitLengths[i];
-        }
-
-        if (bitPosition > this.valueCount)
-        {
-            this.remainderLength = CompressedSequence.Log2(bitPosition / this.valueCount);
-
-            if (this.remainderLength == 0)
+                if (this.remainderLength == 0)
+                    this.remainderLength = 1;
+            }
+            else
                 this.remainderLength = 1;
+
+            this.lengthRemainders = (uint*)NativeMemory.Alloc(this.BitsTableSize, sizeof(uint));
+
+            var remsMask = (1U << (int)this.remainderLength) - 1U;
+            bitPosition = 0;
+
+            for (i = 0; i < this.valueCount; i++)
+            {
+                bitPosition += bitLengths[i];
+                BitBool.SetBitsValue(this.lengthRemainders, i, bitPosition & remsMask, this.remainderLength, remsMask);
+                Console.Write($"{i},{bitPosition & remsMask:X} ");
+                bitLengths[i] = bitPosition >> (int)this.remainderLength;
+            }
+            Console.WriteLine();
+
+            for (i = 0; i < this.valueCount; i++)
+            {
+                Console.Write($"{i},{bitLengths[i]} ");
+            }
+            Console.WriteLine();
+
+            this.selectTable = new(bitLengths, this.valueCount);
         }
-        else
-            this.remainderLength = 1;
-
-        this.lengthRemainders = (uint*)NativeMemory.Alloc(this.EncodedTableSize, sizeof(uint));
-
-        var remsMask = (1U << (int)this.remainderLength) - 1U;
-        bitPosition = 0;
-
-        for (i = 0; i < this.valueCount; i++)
+        finally
         {
-            bitPosition += bitLengths[i];
-            BitBool.SetBitsValue(this.lengthRemainders, i, bitPosition & remsMask, this.remainderLength, remsMask);
-            bitLengths[i] = bitPosition >> (int)this.remainderLength;
+            NativeMemory.Free(bitLengths);
         }
-        
-        this.selectTable = new(bitLengths, this.totalBitLength >> (int)this.remainderLength);
     }
 
     public uint Query(uint idx)
     {
+        if (idx > this.valueCount)
+            throw new IndexOutOfRangeException();
+
         uint selRes;
         uint encIdx;
         var remsMask = (uint)((1 << (int)this.remainderLength) - 1);
@@ -130,9 +152,11 @@ public unsafe class CompressedSequence : IDisposable
         var encLength = (selRes - idx) << (int)this.remainderLength;
         encLength += BitBool.GetBitsValue(this.lengthRemainders, idx, this.remainderLength, remsMask);
         encLength -= encIdx;
+        if (encIdx > 0)
+            encIdx -= idx;
         if (encLength == 0)
             return 0;
-        return BitBool.GetBitsAtPos(this.storeTable, encIdx, encLength) + (uint)((1 << (int)encLength) - 1);
+        return BitBool.GetBitsAtPos(this.storeTable, encIdx, encLength - 1) + (1u << (int)encLength - 1);
     }
 
     //public CompressedSequence(BinaryReader reader, uint values)

@@ -44,7 +44,7 @@ public sealed unsafe class Select : IDisposable
     {
         get
         {
-            var bitCount = this.keyCount * this.maxValue;
+            var bitCount = this.keyCount + this.maxValue;
             var vecSize = (bitCount + 31) >> 5;
             var selTableSize = (this.keyCount >> stepSelectTableBitCount) + 1;
             return 2 * sizeof(uint) + vecSize * sizeof(uint) + selTableSize * sizeof(uint);
@@ -79,8 +79,10 @@ public sealed unsafe class Select : IDisposable
 
     private void Dispose(bool isDisposing)
     {
-        NativeMemory.Free(this.ValuePresentFlags);
-        NativeMemory.Free(this.valueSkipTable);
+        if (this.ValuePresentFlags != null)
+            NativeMemory.Free(this.ValuePresentFlags);
+        if (this.valueSkipTable != null)
+            NativeMemory.Free(this.valueSkipTable);
     }
 
     ~Select() => this.Dispose(false);
@@ -89,17 +91,29 @@ public sealed unsafe class Select : IDisposable
     {
         fixed (uint* pKeys = keys)
         {
-            this.Generate(pKeys, (uint)keys.Length, out this.maxValue, out this.valuePresentFlags, out this.valueSkipTable);
+            this.keyCount = (uint)keys.Length;
+            this.Generate(pKeys,  out this.maxValue, out this.valuePresentFlags, out this.valueSkipTable);
         }
     }
 
-    public Select(uint* keys, uint keyCount) =>
-        this.Generate(keys, keyCount, out this.maxValue, out this.valuePresentFlags, out this.valueSkipTable);
+    public Select(uint* keys, uint keyCount)
+    {
+        this.keyCount = keyCount;
+        this.Generate(keys, out this.maxValue, out this.valuePresentFlags, out this.valueSkipTable);
+    }
 
-    private void Generate(uint* keys, uint keyCount, out uint maxValue, out uint* valuePresentFlags, out uint* valueSkipTable)
+    private void Generate(uint* keys, out uint maxValue, out uint* valuePresentFlags, out uint* valueSkipTable)
     {
 
         uint buffer = 0;
+        if (keyCount == 0)
+        {
+            maxValue = 0;
+            valuePresentFlags = null;
+            valueSkipTable = null;
+            return;
+        }
+
         maxValue = keys[keyCount - 1];
         var nbits = keyCount + maxValue;
         var flagsSize = nbits + 0x1f >> 5;

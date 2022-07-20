@@ -1,5 +1,4 @@
-﻿using System.Linq;
-using Xunit;
+﻿using Xunit;
 
 namespace NetMph.Tests;
 
@@ -8,20 +7,20 @@ public class CompressedRankTests
     [Fact]
     public void SimpleRank()
     {
-        CompressedRank r = new(new uint[] { 33 });
+        using CompressedRank r = new(new uint[] { 33 });
         Assert.Equal(0u, r.GetRank(0));
     }
     [Fact]
     public void SimpleRank2()
     {
-        CompressedRank r = new(new uint[] { 33, 88 });
+        using CompressedRank r = new(new uint[] { 33, 88 });
         Assert.Equal(0u, r.GetRank(33));
         Assert.Equal(1u, r.GetRank(88));
     }
     [Fact]
     public void SimpleRank3()
     {
-        CompressedRank r = new(new uint[] { 33, 88, 122 });
+        using CompressedRank r = new(new uint[] { 33, 88, 122 });
         Assert.Equal(0u, r.GetRank(3));
         Assert.Equal(0u, r.GetRank(33));
         Assert.Equal(1u, r.GetRank(44));
@@ -32,4 +31,3 @@ public class CompressedRankTests
     }
 
 }
-

@@ -52,8 +52,8 @@ internal static unsafe class BitBool
 
         if (shift2 >= stringLength)
             return;
-        bitsTable[wordIndex + 1] &= ~(stringMask << shift2);
-        bitsTable[wordIndex + 1] |= bitsString << shift2;
+        bitsTable[wordIndex + 1] &= ~(stringMask >> shift2);
+        bitsTable[wordIndex + 1] |= bitsString >> shift2;
     }
     public static void SetBitsAtPos(uint* bitsTable, uint bitIndex, uint bitsString, uint stringLength)
     {
