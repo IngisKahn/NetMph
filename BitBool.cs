@@ -17,7 +17,7 @@ internal static unsafe class BitBool
         for (var i = 0; i < 32; i++)
             BitBool.bitMask32[i] = 1u << i;
         BitBool.valueMask = (byte*)NativeMemory.Alloc(4);
-        *(uint*) BitBool.valueMask = 0x3FCFF3FC;
+        *(uint*)BitBool.valueMask = 0x3FCFF3FC;
     }
 
     public static int GetBit(byte* array, int index) =>
@@ -68,12 +68,37 @@ internal static unsafe class BitBool
         bitsTable[wordIdx + 1] &= ~(stringMask >> shift2);
         bitsTable[wordIdx + 1] |= bitsString >> shift2;
     }
+    public static void SetBitsAtPos(ulong* bitsTable, uint bitIndex, ulong bitsString, uint stringLength)
+    {
+        var wordIdx = (int)bitIndex >> 6;
+        var shift1 = (int)bitIndex & 0x3F;
+        var shift2 = 64 - shift1;
+        var stringMask = (1u << (int)stringLength) - 1;
+        bitsTable[wordIdx] &= ~(stringMask << shift1);
+        bitsTable[wordIdx] |= bitsString << shift1;
+        if (shift2 >= stringLength)
+            return;
+        bitsTable[wordIdx + 1] &= ~(stringMask >> shift2);
+        bitsTable[wordIdx + 1] |= bitsString >> shift2;
+    }
 
     public static uint GetBitsAtPos(uint* bitsTable, uint pos, uint stringLength)
     {
         var wordIdx = (int)pos >> 5;
         var shift1 = (int)pos & 0x1f;
         var shift2 = 0x20 - shift1;
+        var stringMask = (uint)((1 << (int)stringLength) - 1);
+        var bitsString = bitsTable[wordIdx] >> shift1 & stringMask;
+        if (shift2 < stringLength)
+            bitsString |= bitsTable[wordIdx + 1] << shift2 & stringMask;
+        return bitsString;
+    }
+
+    public static ulong GetBitsAtPos(ulong* bitsTable, uint pos, uint stringLength)
+    {
+        var wordIdx = (int)pos >> 6;
+        var shift1 = (int)pos & 0x3f;
+        var shift2 = 0x40 - shift1;
         var stringMask = (uint)((1 << (int)stringLength) - 1);
         var bitsString = bitsTable[wordIdx] >> shift1 & stringMask;
         if (shift2 < stringLength)
@@ -91,5 +116,29 @@ internal static unsafe class BitBool
         if (shift2 < stringLength)
             bitsString |= bitsTable[wordIdx + 1] << shift2 & stringMask;
         return bitsString;
+    }
+
+    public static ulong Read7BitNumber(ref byte* data)
+    {
+        var value = 0ul;
+        byte temp;
+        do
+        {
+            temp = *data++;
+            value <<= 7;
+            value |= temp & 0x7Ful;
+        } while ((temp & 0x80) != 0);
+        return value;
+    }
+
+    public static void Write7BitNumber(ref byte* data, ulong value)
+    {
+        do
+        {
+            var temp = (byte)(value & 0x7F);
+            value >>= 7;
+            temp |= (byte)((value - 1) >> 56);
+            *data++ = temp;
+        } while (value != 0);
     }
 }

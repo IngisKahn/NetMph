@@ -16,10 +16,10 @@ public sealed unsafe class Select : IDisposable
             return id + (id >> 4) & 0xF;
         }
 
-        Select.rankLookupTable = (byte*)NativeMemory.Alloc(256);
+        Select.rankLookupTable = (byte*)NativeMemory.Alloc((nuint)256);
         for (var i = 0; i < 256; i++)
             Select.rankLookupTable[i] = (byte)CountSetBitsInByte((uint)i);
-        Select.highBitRanks = (byte*)NativeMemory.Alloc(256 * 8);
+        Select.highBitRanks = (byte*)NativeMemory.Alloc((nuint)256 * 8);
         var pHighRanks = Select.highBitRanks;
         var bbb = pHighRanks;
         for (var i = 0; i < 256; i++)
@@ -40,16 +40,15 @@ public sealed unsafe class Select : IDisposable
     private const int stepSelectTableBitCount = 7;
     private const int maskStepSelectTable = 0x7F;
 
-    public uint Size
+    public static uint SizeEstimate(uint count, uint maxValue)
     {
-        get
-        {
-            var bitCount = this.keyCount + this.maxValue;
-            var vecSize = (bitCount + 31) >> 5;
-            var selTableSize = (this.keyCount >> stepSelectTableBitCount) + 1;
-            return 2 * sizeof(uint) + vecSize * sizeof(uint) + selTableSize * sizeof(uint);
-        }
+        var bitCount = count + maxValue;
+        var vecSize = (bitCount + 31) >> 5;
+        var selTableSize = (count >> stepSelectTableBitCount) + 1;
+        return 2 * sizeof(uint) + vecSize * sizeof(uint) + selTableSize * sizeof(uint);
     }
+
+    public uint Size => Select.SizeEstimate(this.keyCount, this.maxValue);
 
     /// <summary>
     /// Each bit represents either to increase the counter "0" or that there exists a value equal to counter "1"
@@ -92,7 +91,7 @@ public sealed unsafe class Select : IDisposable
         fixed (uint* pKeys = keys)
         {
             this.keyCount = (uint)keys.Length;
-            this.Generate(pKeys,  out this.maxValue, out this.valuePresentFlags, out this.valueSkipTable);
+            this.Generate(pKeys, out this.maxValue, out this.valuePresentFlags, out this.valueSkipTable);
         }
     }
 
@@ -118,8 +117,8 @@ public sealed unsafe class Select : IDisposable
         var nbits = keyCount + maxValue;
         var flagsSize = nbits + 0x1f >> 5;
         var skipTableSize = (keyCount >> Select.stepSelectTableBitCount) + 1;
-        valuePresentFlags = (uint*)NativeMemory.Alloc(flagsSize, sizeof(uint));
-        valueSkipTable = (uint*)NativeMemory.Alloc(skipTableSize, sizeof(uint));
+        valuePresentFlags = (uint*)NativeMemory.Alloc((nuint)flagsSize, (nuint)sizeof(uint));
+        valueSkipTable = (uint*)NativeMemory.Alloc((nuint)skipTableSize, (nuint)sizeof(uint));
 
         int SetFlags(uint max)
         {
@@ -237,11 +236,23 @@ public sealed unsafe class Select : IDisposable
         var nbits = this.keyCount + this.maxValue;
         var vecSize = nbits + 0x1f >> 5;
         var selTableSize = (this.keyCount >> 7) + 1;
-        this.valuePresentFlags = (uint*)NativeMemory.Alloc(vecSize, sizeof(uint));
-        this.valueSkipTable = (uint*)NativeMemory.Alloc(selTableSize, sizeof(uint));
+        this.valuePresentFlags = (uint*)NativeMemory.Alloc((nuint)vecSize, (nuint)sizeof(uint));
+        this.valueSkipTable = (uint*)NativeMemory.Alloc((nuint)selTableSize, (nuint)sizeof(uint));
         Buffer.MemoryCopy(buffer, this.ValuePresentFlags, vecSize, vecSize);
         buffer += vecSize * sizeof(uint);
         Buffer.MemoryCopy(buffer, this.valueSkipTable, selTableSize, selTableSize);
+    }
+    public Select(BinaryReader reader, uint keyCount)
+    {
+        this.keyCount = keyCount;
+        this.maxValue = reader.ReadUInt32();
+        var nbits = this.keyCount + this.maxValue;
+        var vecSize = nbits + 0x1f >> 5;
+        var selTableSize = (this.keyCount >> 7) + 1;
+        this.valuePresentFlags = (uint*)NativeMemory.Alloc((nuint)vecSize, (nuint)sizeof(uint));
+        this.valueSkipTable = (uint*)NativeMemory.Alloc((nuint)selTableSize, (nuint)sizeof(uint));
+        reader.Read(new Span<byte>(this.valuePresentFlags, (int)(vecSize * sizeof(uint))));
+        reader.Read(new Span<byte>(this.valueSkipTable, (int)(selTableSize * sizeof(uint))));
     }
 
     public void Write(byte* buffer, ref uint bufferLength)
@@ -260,9 +271,20 @@ public sealed unsafe class Select : IDisposable
         var nbits = this.keyCount + this.maxValue;
         var vecSize = nbits + 0x1f >> 5;
         var selTableSize = (this.keyCount >> 7) + 1;
-        Buffer.MemoryCopy(this.ValuePresentFlags, uintBuffer, bufferLength - 4, vecSize);
+        Buffer.MemoryCopy(this.valuePresentFlags, uintBuffer, bufferLength - 4, vecSize);
         uintBuffer += vecSize;
         Buffer.MemoryCopy(this.valueSkipTable, uintBuffer, bufferLength - 4 - vecSize, selTableSize);
+    }
+
+    public void Write(BinaryWriter writer)
+    {
+        //writer.Write(this.keyCount);
+        writer.Write(this.maxValue);
+        var nbits = this.keyCount + this.maxValue;
+        var vecSize = nbits + 0x1f >> 5;
+        var selTableSize = (this.keyCount >> 7) + 1;
+        writer.Write(new ReadOnlySpan<byte>(this.valuePresentFlags, (int)(vecSize * sizeof(uint))));
+        writer.Write(new ReadOnlySpan<byte>(this.valueSkipTable, (int)(selTableSize * sizeof(uint))));
     }
 
     public static uint GetStoredValuePacked(uint* packedSelect, uint targetIndex)

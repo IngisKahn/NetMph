@@ -22,14 +22,14 @@ public sealed unsafe class CompressedRank : IDisposable
     private readonly uint maxValue;
     private readonly uint count;
     private readonly uint remainderBitLength;
-    private readonly Select sel;
+    private readonly Select2 sel;
     private readonly uint* valueRemainders;
 
     public CompressedRank(IReadOnlyList<uint> values) // must be a sorted list of values
     {
         this.count = (uint)values.Count;
         this.maxValue = values[^1];
-        this.remainderBitLength = CompressedRank.Log2(this.maxValue / this.count) - 1;
+        this.remainderBitLength = CompressedRank.Log2((this.maxValue + this.count) / this.count );
         if (this.remainderBitLength == 0)
             this.remainderBitLength = 1;
         var maxSignificant = this.maxValue >> (int)this.remainderBitLength;
@@ -46,7 +46,7 @@ public sealed unsafe class CompressedRank : IDisposable
             selectVector[currentValue - 1] = valueIndex;
         }
 
-        this.sel = new(selectVector, this.count);
+        this.sel = new(selectVector, maxSignificant);
     }
 
     public uint GetRank(uint valueIndex)
@@ -65,7 +65,7 @@ public sealed unsafe class CompressedRank : IDisposable
         }
         else
         {
-            selRes = this.sel.GetBitIndex(valueSignificant - 1) + 1;
+            selRes = (uint) (this.sel.GetBitIndex(valueSignificant - 1) + 1);
             rank = selRes - valueSignificant;
         }
 

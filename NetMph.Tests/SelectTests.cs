@@ -6,9 +6,9 @@ namespace NetMph.Tests;
 public class SelectTests
 {
     [Fact]
-    public void T1()
+    public void ItRuns()
     {
-        using Select s = new(
+        using Select2 s = new(
             new uint[]
             {
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 4, 4,
@@ -19,9 +19,9 @@ public class SelectTests
     }
 
     [Fact]
-    public void Get2()
+    public void GetFirstNonZeroValue()
     {
-        using Select s = new(
+        using Select2 s = new(
             new uint[]
             {
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 4, 4,
@@ -32,9 +32,9 @@ public class SelectTests
 
     }
     [Fact]
-    public void Get3()
+    public void GetLastZeroValue()
     {
-        using Select s = new(
+        using Select2 s = new( 
             new uint[]
             {
                     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4,
@@ -45,14 +45,14 @@ public class SelectTests
         Assert.Equal(0u, q);
     }
     [Fact]
-    public void Get4()
+    public void GetAllValues()
     { var vals = new uint[]
             {
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4,
                 4, 4,
                 4
             };
-        using Select s = new(vals);
+        using Select2 s = new(vals);
 
         for (var i = 0u; i < vals.Length; i++)
         {
@@ -65,7 +65,7 @@ public class SelectTests
     public void GetRange1to50()
     {
         var vals = Enumerable.Range(1, 50).Select(i => (uint)i).ToArray();
-        using Select s = new(vals);
+        using Select2 s = new(vals);
 
         for (var i = 0u; i < vals.Length; i++)
         {
@@ -78,10 +78,10 @@ public class SelectTests
     public void GetRange1to500()
     {
         var vals = Enumerable.Range(1, 500).Select(i => (uint)i).ToArray();
-        using Select s = new(vals);
+        using Select2 s = new(vals);
 
-        for (var i = 0u; i < vals.Length; i++)
-        //var i = 128u;
+        //for (var i = 0u; i < vals.Length; i++)
+        var i = 128u;
         {
             var q = s.GetStoredValue(i);
             Assert.Equal(vals[i], q);
