@@ -31,7 +31,7 @@ public class CompressedSequenceTests
     [Fact]
     public void Three()
     {
-        using var s = new CompressedSequence(new[] { 33u, 22u,789789u, 31u, 32u });
+        using var s = new CompressedSequence(new[] { 33u, 22u,789789u, 31u, 32u, 0u });
         Assert.Equal(33u, s.Query(0));
         Assert.Equal(22u, s.Query(1));
         Assert.Equal(789789u, s.Query(2));
@@ -39,6 +39,7 @@ public class CompressedSequenceTests
         Assert.Equal(31u, s.Query(3));
 
         Assert.Equal(32u, s.Query(4));
+        Assert.Equal(0u, s.Query(5));
     }
 
     [Fact]
@@ -85,7 +86,7 @@ public class CompressedSequenceTests
         s2.Position = 0;
         using BinaryReader reader = new(s2);
         using CompressedSequence ss = new(reader, 3000);
-        CompressedSequence.
+        //CompressedSequence.
         for (var i = 0; i < values.Length; i++)
             Assert.Equal(values[i], ss.Query((uint)i));
     }

@@ -83,11 +83,8 @@ public unsafe class CompressedSequence : IDisposable
                 var storedValue = valsTable[i] - ((1u << (int)bitLengths[i] - 1) - 0u);
                 BitBool.SetBitsAtPos(this.storeTable, bitPosition, storedValue, bitLengths[i] - 1);
 
-                //Console.Write($"{bitPosition},{storedValue:X},{bitLengths[i] - 1} ");
-
                 bitPosition += bitLengths[i] - 1;
             }
-            //Console.WriteLine();
 
             if (bitPosition > this.valueCount)
             {
@@ -108,16 +105,8 @@ public unsafe class CompressedSequence : IDisposable
             {
                 bitPosition += bitLengths[i];
                 BitBool.SetBitsValue(this.lengthRemainders, i, bitPosition & remsMask, this.remainderLength, remsMask);
-                //Console.Write($"{i},{bitPosition & remsMask:X} ");
                 bitLengths[i] = bitPosition >> (int)this.remainderLength;
             }
-            //Console.WriteLine();
-
-            //for (i = 0; i < this.valueCount; i++)
-            //{
-            //    Console.Write($"{i},{bitLengths[i]} ");
-            //}
-            //Console.WriteLine();
 
             this.selectTable = new(bitLengths, this.valueCount);
         }
@@ -161,8 +150,8 @@ public unsafe class CompressedSequence : IDisposable
     public CompressedSequence(BinaryReader reader, uint values)
     {
         this.valueCount = values;
-        this.remainderLength = reader.ReadUInt32();
-        this.totalBitLength = reader.ReadUInt32();
+        this.remainderLength = reader.ReadByte();
+        this.totalBitLength = (uint)reader.Read7BitEncodedInt64();
         this.storeTable = (uint*)NativeMemory.Alloc(this.StoreTableSize, sizeof(uint));
         reader.Read(new Span<byte>(this.storeTable, (int)(this.StoreTableSize * sizeof(uint))));
         this.lengthRemainders = (uint*)NativeMemory.Alloc(this.BitsTableSize, sizeof(uint));
@@ -173,8 +162,8 @@ public unsafe class CompressedSequence : IDisposable
 
     public void Write(BinaryWriter writer)
     {
-        writer.Write(this.remainderLength);
-        writer.Write(this.totalBitLength);
+        writer.Write((byte)this.remainderLength);
+        writer.Write7BitEncodedInt64(this.totalBitLength);
         writer.Write(new Span<byte>(this.storeTable, (int)(this.StoreTableSize * sizeof(uint))));
         writer.Write(new Span<byte>(this.lengthRemainders, (int)(this.BitsTableSize * sizeof(uint))));
 
@@ -303,16 +292,8 @@ public unsafe class CompressedSequence64 : IDisposable
             {
                 bitPosition += bitLengths[i];
                 BitBool.SetBitsValue(this.lengthRemainders, i, bitPosition & remsMask, this.remainderLength, remsMask);
-                //Console.Write($"{i},{bitPosition & remsMask:X} ");
                 bitLengths[i] = bitPosition >> (int)this.remainderLength;
             }
-            //Console.WriteLine();
-
-            //for (i = 0; i < this.valueCount; i++)
-            //{
-            //    Console.Write($"{i},{bitLengths[i]} ");
-            //}
-            //Console.WriteLine();
 
             this.selectTable = new(bitLengths, this.valueCount);
         }
@@ -356,65 +337,22 @@ public unsafe class CompressedSequence64 : IDisposable
     public CompressedSequence64(BinaryReader reader, uint values)
     {
         this.valueCount = values;
-        this.remainderLength = reader.ReadUInt32();
-        this.totalBitLength = reader.ReadUInt32();
+        this.remainderLength = reader.ReadByte();
+        this.totalBitLength = (uint)reader.Read7BitEncodedInt64();
         this.storeTable = (ulong*)NativeMemory.Alloc(this.StoreTableSize, sizeof(ulong));
         reader.Read(new Span<byte>(this.storeTable, (int)(this.StoreTableSize * sizeof(ulong))));
         this.lengthRemainders = (uint*)NativeMemory.Alloc(this.BitsTableSize, sizeof(uint));
         reader.Read(new Span<byte>(this.lengthRemainders, (int)(this.BitsTableSize * sizeof(uint))));
-        //    fixed (byte* fbp = bytes)
-        //    {
-        //        var stp = this.storeTable;
-        //        var uip = (uint*)fbp;
-        //        for (var i = 0; i < this.StoreTableSize; i++)
-        //            *stp++ = *uip++;
-        //    }
-
-        //    bytes = reader.ReadBytes((int)this.EncodedTableSize << 2);
-        //    fixed (byte* fbp = bytes)
-        //    {
-        //        var lrp = this.lengthRemainders;
-        //        var uip = (uint*)fbp;
-        //        for (var i = 0; i < this.EncodedTableSize; i++)
-        //            *lrp++ = *uip++;
-        //    }
 
         this.selectTable = new(reader, this.valueCount);//, this.totalBitLength >> (int)this.remainderLength);
     }
 
     public void Write(BinaryWriter writer)
     {
-        writer.Write(this.remainderLength);
-        writer.Write(this.totalBitLength);
+        writer.Write((byte)this.remainderLength);
+        writer.Write7BitEncodedInt64(this.totalBitLength);
         writer.Write(new Span<byte>(this.storeTable, (int)(this.StoreTableSize * sizeof(ulong))));
         writer.Write(new Span<byte>(this.lengthRemainders, (int)(this.BitsTableSize * sizeof(uint))));
-
-        //    var bytes = new byte[this.storeTable.Length << 2];
-        //    unsafe
-        //    {
-        //        fixed (byte* fbp = bytes)
-        //        fixed (uint* fbitsp = this.storeTable)
-        //        {
-        //            var bitsp = fbitsp;
-        //            var uip = (uint*)fbp;
-        //            for (var i = 0; i < this.storeTable.Length; i++)
-        //                *uip++ = *bitsp++;
-        //        }
-        //    }
-        //    writer.Write(bytes);
-        //    bytes = new byte[this.lengthRemainders.Length << 2];
-        //    unsafe
-        //    {
-        //        fixed (byte* fbp = bytes)
-        //        fixed (uint* fselp = this.lengthRemainders)
-        //        {
-        //            var selp = fselp;
-        //            var uip = (uint*)fbp;
-        //            for (var i = 0; i < this.lengthRemainders.Length; i++)
-        //                *uip++ = *selp++;
-        //        }
-        //    }
-        //    writer.Write(bytes);
 
         this.selectTable.Write(writer);
     }
