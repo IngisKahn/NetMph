@@ -7,20 +7,20 @@ public class CompressedRankTests
     [Fact]
     public void SimpleRank()
     {
-        using CompressedRank r = new(new uint[] { 33, 33 });
+        using CompressedRank<uint> r = new(new uint[] { 33, 33 });
         Assert.Equal(0u, r.GetRank(0));
     }
     [Fact]
     public void SimpleRank2()
     {
-        using CompressedRank r = new(new uint[] { 33, 88 });
+        using CompressedRank<uint> r = new(new uint[] { 33, 88 });
         Assert.Equal(0u, r.GetRank(33));
         Assert.Equal(1u, r.GetRank(88));
     }
     [Fact]
     public void SimpleRank3()
     {
-        using CompressedRank r = new(new uint[] { 33, 88, 122 });
+        using CompressedRank<uint> r = new(new uint[] { 33, 88, 122 });
         Assert.Equal(0u, r.GetRank(3));
         Assert.Equal(0u, r.GetRank(33));
         Assert.Equal(1u, r.GetRank(44));

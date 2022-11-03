@@ -2,12 +2,12 @@
 
 namespace NetMph;
 
-public sealed unsafe class Select : IDisposable
+public sealed unsafe class SelectOld : IDisposable
 {
     private static readonly byte* rankLookupTable;
     private static readonly byte* highBitRanks;
 
-    static Select()
+    static SelectOld()
     {
         static uint CountSetBitsInByte(uint id)
         {
@@ -16,11 +16,11 @@ public sealed unsafe class Select : IDisposable
             return id + (id >> 4) & 0xF;
         }
 
-        Select.rankLookupTable = (byte*)NativeMemory.Alloc((nuint)256);
+        SelectOld.rankLookupTable = (byte*)NativeMemory.Alloc((nuint)256);
         for (var i = 0; i < 256; i++)
-            Select.rankLookupTable[i] = (byte)CountSetBitsInByte((uint)i);
-        Select.highBitRanks = (byte*)NativeMemory.Alloc((nuint)256 * 8);
-        var pHighRanks = Select.highBitRanks;
+            SelectOld.rankLookupTable[i] = (byte)CountSetBitsInByte((uint)i);
+        SelectOld.highBitRanks = (byte*)NativeMemory.Alloc((nuint)256 * 8);
+        var pHighRanks = SelectOld.highBitRanks;
         var bbb = pHighRanks;
         for (var i = 0; i < 256; i++)
         {
@@ -48,7 +48,7 @@ public sealed unsafe class Select : IDisposable
         return 2 * sizeof(uint) + vecSize * sizeof(uint) + selTableSize * sizeof(uint);
     }
 
-    public uint Size => Select.SizeEstimate(this.keyCount, this.maxValue);
+    public uint Size => SelectOld.SizeEstimate(this.keyCount, this.maxValue);
 
     /// <summary>
     /// Each bit represents either to increase the counter "0" or that there exists a value equal to counter "1"
@@ -84,9 +84,9 @@ public sealed unsafe class Select : IDisposable
             NativeMemory.Free(this.valueSkipTable);
     }
 
-    ~Select() => this.Dispose(false);
+    ~SelectOld() => this.Dispose(false);
 
-    public Select(uint[] keys)
+    public SelectOld(uint[] keys)
     {
         fixed (uint* pKeys = keys)
         {
@@ -95,7 +95,7 @@ public sealed unsafe class Select : IDisposable
         }
     }
 
-    public Select(uint* keys, uint keyCount)
+    public SelectOld(uint* keys, uint keyCount)
     {
         this.keyCount = keyCount;
         this.Generate(keys, out this.maxValue, out this.valuePresentFlags, out this.valueSkipTable);
@@ -116,7 +116,7 @@ public sealed unsafe class Select : IDisposable
         maxValue = keys[keyCount - 1];
         var nbits = keyCount + maxValue;
         var flagsSize = nbits + 0x1f >> 5;
-        var skipTableSize = (keyCount >> Select.stepSelectTableBitCount) + 1;
+        var skipTableSize = (keyCount >> SelectOld.stepSelectTableBitCount) + 1;
         valuePresentFlags = (uint*)NativeMemory.Alloc((nuint)flagsSize, (nuint)sizeof(uint));
         valueSkipTable = (uint*)NativeMemory.Alloc((nuint)skipTableSize, (nuint)sizeof(uint));
 
@@ -127,7 +127,7 @@ public sealed unsafe class Select : IDisposable
             {
                 while (keys[keyIndex] == currentValue)
                 {
-                    Select.Insert1(ref buffer);
+                    SelectOld.Insert1(ref buffer);
                     flagIndex++;
 
                     if ((flagIndex & 0x1f) == 0)
@@ -143,7 +143,7 @@ public sealed unsafe class Select : IDisposable
 
                 while (keys[keyIndex] > currentValue)
                 {
-                    Select.Insert0(ref buffer);
+                    SelectOld.Insert0(ref buffer);
                     flagIndex++;
 
                     if ((flagIndex & 0x1f) == 0) // (idx & 0x1f) = idx % 32
@@ -178,10 +178,10 @@ public sealed unsafe class Select : IDisposable
             do
             {
                 lastValues = values;
-                values += Select.rankLookupTable[bitsTable[valueArrayIndex++]];
+                values += SelectOld.rankLookupTable[bitsTable[valueArrayIndex++]];
             } while (values <= targetValues);
 
-            this.valueSkipTable[skipTableIndex++] = Select.highBitRanks[bitsTable[valueArrayIndex - 1] * 8 + targetValues - lastValues] + (valueArrayIndex - 1 << 3);
+            this.valueSkipTable[skipTableIndex++] = SelectOld.highBitRanks[bitsTable[valueArrayIndex - 1] * 8 + targetValues - lastValues] + (valueArrayIndex - 1 << 3);
             targetValues += stepSelectTable;
         }
     }
@@ -205,7 +205,7 @@ public sealed unsafe class Select : IDisposable
             partSum += rankLookupTable[bitTable[byteIndex++]];
         } while (partSum <= oneIndex);
 
-        return Select.highBitRanks[bitTable[byteIndex - 1] * 8 + oneIndex - lastPartSum] + (byteIndex - 1 << 3);
+        return SelectOld.highBitRanks[bitTable[byteIndex - 1] * 8 + oneIndex - lastPartSum] + (byteIndex - 1 << 3);
     }
 
     public uint GetStoredValue(uint valueIndex) => GetStoredValue(this.ValuePresentFlags, this.valueSkipTable, valueIndex);
@@ -224,12 +224,12 @@ public sealed unsafe class Select : IDisposable
             lastPartSum = partSum;
             partSum += rankLookupTable[bitTable[byteIndex++]];
         } while (partSum <= targetIndex);
-        return Select.highBitRanks[bitTable[byteIndex - 1] * 8 + targetIndex - lastPartSum] + (byteIndex - 1 << 3);
+        return SelectOld.highBitRanks[bitTable[byteIndex - 1] * 8 + targetIndex - lastPartSum] + (byteIndex - 1 << 3);
     }
 
     public uint GetNextBitIndex(uint bitIndex) => GetNextBitIndex(this.ValuePresentFlags, bitIndex);
 
-    public Select(byte* buffer)
+    public SelectOld(byte* buffer)
     {
         this.keyCount = *(uint*)buffer++;
         this.maxValue = *(uint*)buffer++;
@@ -242,7 +242,7 @@ public sealed unsafe class Select : IDisposable
         buffer += vecSize * sizeof(uint);
         Buffer.MemoryCopy(buffer, this.valueSkipTable, selTableSize, selTableSize);
     }
-    public Select(BinaryReader reader, uint keyCount)
+    public SelectOld(BinaryReader reader, uint keyCount)
     {
         this.keyCount = keyCount;
         this.maxValue = reader.ReadUInt32();
@@ -293,7 +293,7 @@ public sealed unsafe class Select : IDisposable
         var maxValue = *packedSelect++;
         var nbits = keyCount + maxValue;
         var vecSize = nbits + 0x1f >> 5;
-        return Select.GetStoredValue(packedSelect, packedSelect + vecSize, targetIndex);
+        return SelectOld.GetStoredValue(packedSelect, packedSelect + vecSize, targetIndex);
     }
 
     public static uint GetBitIndexPacked(uint* packedSelect, uint targetIndex)
@@ -302,9 +302,9 @@ public sealed unsafe class Select : IDisposable
         var maxValue = *packedSelect++;
         var nbits = keyCount + maxValue;
         var vecSize = nbits + 0x1f >> 5;
-        return Select.GetBitIndex(packedSelect, packedSelect + vecSize, targetIndex);
+        return SelectOld.GetBitIndex(packedSelect, packedSelect + vecSize, targetIndex);
     }
 
     public static uint GetNextBitIndexPacked(uint* packedSelect, uint bitIndex) =>
-        Select.GetNextBitIndex(packedSelect + sizeof(uint) * 2, bitIndex);
+        SelectOld.GetNextBitIndex(packedSelect + sizeof(uint) * 2, bitIndex);
 }

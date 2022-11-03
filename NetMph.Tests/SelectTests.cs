@@ -8,8 +8,8 @@ public class SelectTests
     [Fact]
     public void ItRuns()
     {
-        using Select2 s = new(
-            new uint[]
+        using Select s = new(
+            new ulong[]
             {
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 4, 4,
                 4
@@ -21,8 +21,8 @@ public class SelectTests
     [Fact]
     public void GetFirstNonZeroValue()
     {
-        using Select2 s = new(
-            new uint[]
+        using Select s = new(
+            new ulong[]
             {
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 4, 4,
                 4
@@ -34,8 +34,8 @@ public class SelectTests
     [Fact]
     public void GetLastZeroValue()
     {
-        using Select2 s = new( 
-            new uint[]
+        using Select s = new( 
+            new ulong[]
             {
                     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4,
                     4, 4,
@@ -46,13 +46,13 @@ public class SelectTests
     }
     [Fact]
     public void GetAllValues()
-    { var vals = new uint[]
+    { var vals = new ulong[]
             {
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4,
                 4, 4,
                 4
             };
-        using Select2 s = new(vals);
+        using Select s = new(vals);
 
         for (var i = 0u; i < vals.Length; i++)
         {
@@ -64,8 +64,8 @@ public class SelectTests
     [Fact]
     public void GetRange1to50()
     {
-        var vals = Enumerable.Range(1, 50).Select(i => (uint)i).ToArray();
-        using Select2 s = new(vals);
+        var vals = Enumerable.Range(1, 50).Select(i => (ulong)i).ToArray();
+        using Select s = new(vals);
 
         for (var i = 0u; i < vals.Length; i++)
         {
@@ -77,8 +77,8 @@ public class SelectTests
     [Fact]
     public void GetRange1to500()
     {
-        var vals = Enumerable.Range(1, 500).Select(i => (uint)i).ToArray();
-        using Select2 s = new(vals);
+        var vals = Enumerable.Range(1, 500).Select(i => (ulong)i).ToArray();
+        using Select s = new(vals, true);
 
         //for (var i = 0u; i < vals.Length; i++)
         var i = 128u;
@@ -87,4 +87,7 @@ public class SelectTests
             Assert.Equal(vals[i], q);
         }
     }
+
+    //[Fact]
+
 }

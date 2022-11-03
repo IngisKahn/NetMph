@@ -1,4 +1,5 @@
-﻿using System.Runtime.InteropServices;
+﻿using System.Numerics;
+using System.Runtime.InteropServices;
 
 namespace NetMph;
 
@@ -54,6 +55,36 @@ internal static unsafe class BitBool
             return;
         bitsTable[wordIndex + 1] &= ~(stringMask >> shift2);
         bitsTable[wordIndex + 1] |= bitsString >> shift2;
+    }
+    public static void SetBitsValue(ulong* bitsTable, uint index, ulong bitsString, uint stringLength, ulong stringMask)
+    {
+        var bitIndex = index * stringLength;
+        var wordIndex = bitIndex >> 6;
+        var shift1 = (int)bitIndex & 0x3F;
+        var shift2 = 64 - shift1;
+
+        bitsTable[wordIndex] &= ~(stringMask << shift1);
+        bitsTable[wordIndex] |= bitsString << shift1;
+
+        if (shift2 >= stringLength)
+            return;
+        bitsTable[wordIndex + 1] &= ~(stringMask >> shift2);
+        bitsTable[wordIndex + 1] |= bitsString >> shift2;
+    }
+    public static void SetBitsAtPos<T>(ulong* bitsTable, ulong bitIndex, T bitsString, uint stringLength)
+        where T : IConvertible
+    {
+        var wordIdx = (long)bitIndex >> 6;
+        var shift1 = (int)bitIndex & 0x3F;
+        var shift2 = 64 - shift1;
+        var stringMask = (1u << (int)stringLength) - 1;
+        var bitsStringValue = bitsString.ToUInt64(null);
+        bitsTable[wordIdx] &= ~(stringMask << shift1);
+        bitsTable[wordIdx] |= bitsStringValue << shift1;
+        if (shift2 >= stringLength)
+            return;
+        bitsTable[wordIdx + 1] &= ~(stringMask >> shift2);
+        bitsTable[wordIdx + 1] |= bitsStringValue >> shift2;
     }
     public static void SetBitsAtPos(uint* bitsTable, uint bitIndex, uint bitsString, uint stringLength)
     {
@@ -118,6 +149,18 @@ internal static unsafe class BitBool
         return bitsString;
     }
 
+    public static ulong GetBitsValue(ulong* bitsTable, uint index, uint stringLength, uint stringMask)
+    {
+        var bitIdx = index * stringLength;
+        var wordIdx = (int)bitIdx >> 6;
+        var shift1 = (int)bitIdx & 0x3F;
+        var shift2 = 0x40 - shift1;
+        var bitsString = bitsTable[wordIdx] >> shift1 & stringMask;
+        if (shift2 < stringLength)
+            bitsString |= bitsTable[wordIdx + 1] << shift2 & stringMask;
+        return bitsString;
+    }
+
     public static ulong Read7BitNumber(ref byte* data)
     {
         var value = 0ul;
@@ -140,5 +183,13 @@ internal static unsafe class BitBool
             temp |= (byte)((value - 1) >> 56);
             *data++ = temp;
         } while (value != 0);
+    }
+
+    public static void Write7BitNumber(Stream stream, ulong value)
+    {
+        var data = stackalloc byte[10];
+        var pData = data;
+        Write7BitNumber(ref pData, value);
+        stream.Write(new(data, (int)(pData - data)));
     }
 }
