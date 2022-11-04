@@ -9,6 +9,7 @@
     <RepositoryUrl>https://github.com/IngisKahn/NetMph.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <Platforms>AnyCPU;x64</Platforms>
+      <LangVersion>preview</LangVersion>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">

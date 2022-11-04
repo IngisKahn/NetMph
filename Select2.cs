@@ -283,7 +283,7 @@ public sealed unsafe class Select : IDisposable, IEnumerable<uint>
         uint lastPartSum;
         var bitTable = (byte*)presentTable;
         var bitIndex = valueIndex >= 1 << stepSelectTableBitCount && subIndex != null 
-            ? subIndex.GetRank(valueIndex >> stepSelectTableBitCount) 
+            ? subIndex.GetRank(valueIndex) 
             : 0;
         var byteIndex = bitIndex >> 3;
         // starting at byteIndex, bitIndex bits are set; value = (valueIndex & ~maskStepSelectTable) - bitIndex
@@ -296,7 +296,7 @@ public sealed unsafe class Select : IDisposable, IEnumerable<uint>
             partSum += rankLookupTable[bitTable[byteIndex++]];
         } while (partSum <= oneIndex);
 
-        return (ulong) (Select.highBitRanks[bitTable[byteIndex - 1] * 8 + oneIndex - lastPartSum] + (byteIndex - 1 << 3));
+        return Select.highBitRanks[bitTable[byteIndex - 1] * 8 + oneIndex - lastPartSum] + (byteIndex - 1 << 3);
     }
 
     public ulong GetStoredValue(uint valueIndex) => GetStoredValue(this.valuePresentFlags, valueIndex, this.subIndex);

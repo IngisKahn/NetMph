@@ -35,11 +35,11 @@ public sealed unsafe class CompressedRank<T> : IDisposable, IEnumerable<T>
         {
             var s = count * (ulong)r;
             var newMax = maxValue >> r;
-            if (newMax == 0) 
-                return new[] {(r, (s + 7) >> 3, s)};
+            if (newMax == 0)
+                return new[] { (r, (s + 7) >> 3, s) };
             s += count + newMax;
-            if (count <= 128 || !isIndexable) 
-                return new[] {(r, (s + 7) >> 3, s)};
+            if (count <= 128 || !isIndexable)
+                return new[] { (r, (s + 7) >> 3, s) };
             var subResult = FindBestSize(count / 128, newMax + count / 128, isIndexable, false, false);
             s += subResult[0].sizeInBits;
             return subResult.Prepend((r, (s + 7) >> 3, s)).ToArray();
@@ -256,7 +256,7 @@ public sealed unsafe class CompressedRank<T> : IDisposable, IEnumerable<T>
     internal CompressedRank(IReadOnlyList<T> values, (int, ulong, ulong)[] sizes, int sizeIndex = 0, bool isIndexable = true) // must be a sorted list of values
     {
         Initialize(values, isIndexable, (_, _, _) => sizes, sizeIndex, out this.count, out this.maxValue, out this.remainderBitLength, out this.valueRemainders, out this.sel);
-        
+
     }
 
     public CompressedRank(BinaryReader reader, ulong? valueCount = null, ulong? maxValue = null, bool isIndexable = true)
@@ -285,7 +285,7 @@ public sealed unsafe class CompressedRank<T> : IDisposable, IEnumerable<T>
         }
         else
         {
-            selRes = (uint)(this.sel.GetBitIndex(valueSignificant - 1) + 1);
+            selRes = (uint)(this.sel.GetBitIndex(valueSignificant - 1) + 0);
             rank = selRes - valueSignificant;
         }
 
@@ -300,6 +300,26 @@ public sealed unsafe class CompressedRank<T> : IDisposable, IEnumerable<T>
         }
 
         return rank;
+    }
+
+    public T GetValue(uint valueIndex)
+    {
+        if (valueIndex >= this.count)
+            return T.CreateChecked(this.maxValue);
+        var remainderMask = (1u << (int)this.remainderBitLength) - 1u;
+
+        var value = T.Zero;
+
+        if (remainderBitLength > 0)
+        {
+            value = T.CreateChecked(BitBool.GetBitsValue(this.valueRemainders, valueIndex, this.remainderBitLength,
+                remainderMask));
+
+            if (this.remainderBitLength >= ((IBinaryInteger<ulong>)this.maxValue).GetShortestBitLength())
+                return value;
+        }
+
+        return T.CreateChecked((this.sel.GetStoredValue(valueIndex)) << (int)this.remainderBitLength) + value;
     }
 
     public void Write(BinaryWriter writer, bool writeSizes = true)
