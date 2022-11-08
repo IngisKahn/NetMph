@@ -14,7 +14,7 @@ public class SelectTests
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 4, 4,
                 4
             });
-        var q = s.GetStoredValue(32);
+        var q = s.GetValueAtIndex(32);
         var n = s.GetNextBitIndex(33);
     }
 
@@ -27,7 +27,7 @@ public class SelectTests
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 4, 4,
                 4
             });
-        var q = s.GetStoredValue(32);
+        var q = s.GetValueAtIndex(32);
         Assert.Equal(4u, q);
 
     }
@@ -41,7 +41,7 @@ public class SelectTests
                     4, 4,
                     4
             });
-        var q = s.GetStoredValue(31);
+        var q = s.GetValueAtIndex(31);
         Assert.Equal(0u, q);
     }
     [Fact]
@@ -56,7 +56,7 @@ public class SelectTests
 
         for (var i = 0u; i < vals.Length; i++)
         {
-            var q = s.GetStoredValue(i);
+            var q = s.GetValueAtIndex(i);
             Assert.Equal(vals[i], q);
         }
     }
@@ -69,7 +69,7 @@ public class SelectTests
 
         for (var i = 0u; i < vals.Length; i++)
         {
-            var q = s.GetStoredValue(i);
+            var q = s.GetValueAtIndex(i);
             Assert.Equal(vals[i], q);
         }
     }
@@ -83,7 +83,7 @@ public class SelectTests
         //for (var i = 0u; i < vals.Length; i++)
         var i = 128u;
         {
-            var q = s.GetStoredValue(i);
+            var q = s.GetValueAtIndex(i);
             Assert.Equal(vals[i], q);
         }
     }

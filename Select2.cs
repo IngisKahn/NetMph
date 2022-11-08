@@ -1,4 +1,6 @@
 ﻿using System.Collections;
+using System.Collections.Generic;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -275,15 +277,35 @@ public sealed unsafe class Select : IDisposable, IEnumerable<uint>
     //    }
     //}
 
-    private static ulong GetStoredValue(uint* presentTable, uint valueIndex, CompressedRank<ulong>? subIndex) =>
+    private static ulong GetValueAtIndex(uint* presentTable, uint valueIndex, CompressedRank<ulong>? subIndex) =>
         GetBitIndex(presentTable, valueIndex, subIndex) - valueIndex;
 
+    private static ulong GetBitIndexOfValue(uint* presentTable, uint value, CompressedRank<ulong>? subIndex)
+    {
+        uint lastPartSum;
+        var bitTable = (byte*)presentTable;
+        var bitIndex = value >= 1 << stepSelectTableBitCount && subIndex != null
+            ? subIndex.GetRank((value >> stepSelectTableBitCount) - 1)
+            : 0;
+        var byteIndex = bitIndex >> 3;
+        // starting at byteIndex, bitIndex bits are set; value = (valueIndex & ~maskStepSelectTable) - bitIndex
+        var oneIndex = value & maskStepSelectTable; // how many bits past the byteIndex to count
+        oneIndex += rankLookupTable[bitTable[byteIndex] & ((1 << (int)(bitIndex & 7)) - 1)];
+        uint partSum = 0;
+        do
+        {
+            lastPartSum = partSum;
+            partSum += rankLookupTable[bitTable[byteIndex++]];
+        } while (partSum <= oneIndex);
+
+        return Select.highBitRanks[bitTable[byteIndex - 1] * 8 + oneIndex - lastPartSum] + (byteIndex - 1 << 3);
+    }
     private static ulong GetBitIndex(uint* presentTable, uint valueIndex, CompressedRank<ulong>? subIndex)
     {
         uint lastPartSum;
         var bitTable = (byte*)presentTable;
-        var bitIndex = valueIndex >= 1 << stepSelectTableBitCount && subIndex != null 
-            ? subIndex.GetRank(valueIndex) 
+        var bitIndex = valueIndex >= 1 << stepSelectTableBitCount && subIndex != null
+            ? subIndex.GetValue((valueIndex >> stepSelectTableBitCount) - 1)
             : 0;
         var byteIndex = bitIndex >> 3;
         // starting at byteIndex, bitIndex bits are set; value = (valueIndex & ~maskStepSelectTable) - bitIndex
@@ -299,8 +321,9 @@ public sealed unsafe class Select : IDisposable, IEnumerable<uint>
         return Select.highBitRanks[bitTable[byteIndex - 1] * 8 + oneIndex - lastPartSum] + (byteIndex - 1 << 3);
     }
 
-    public ulong GetStoredValue(uint valueIndex) => GetStoredValue(this.valuePresentFlags, valueIndex, this.subIndex);
+    public ulong GetValueAtIndex(uint valueIndex) => GetValueAtIndex(this.valuePresentFlags, valueIndex, this.subIndex);
 
+    public ulong GetBitIndexOfValue(uint value) => GetBitIndexOfValue(this.valuePresentFlags, value, this.subIndex);
     public ulong GetBitIndex(uint valueIndex) => GetBitIndex(this.valuePresentFlags, valueIndex, this.subIndex);
 
     private static uint GetNextBitIndex(uint* presentTable, uint bitIndex)
@@ -401,7 +424,7 @@ public sealed unsafe class Select : IDisposable, IEnumerable<uint>
     //    var maxValue = *packedSelect++;
     //    var nbits = keyCount + maxValue;
     //    var vecSize = nbits + 0x1f >> 5;
-    //    return Select.GetStoredValue(packedSelect, (byte*)(packedSelect + vecSize), targetIndex, 0, 0);
+    //    return Select.GetValueAtIndex(packedSelect, (byte*)(packedSelect + vecSize), targetIndex, 0, 0);
     //}
 
     //public static ulong GetBitIndexPacked(uint* packedSelect, uint targetIndex)
@@ -471,4 +494,210 @@ public sealed unsafe class Select : IDisposable, IEnumerable<uint>
     }
 
     public IEnumerator<uint> GetEnumerator() => new SelectEnumerator(this.valuePresentFlags, this.keyCount);
+}
+
+internal static unsafe class BitList
+{
+    private static readonly byte* rankLookupTable;
+    private static readonly byte* highBitRanks;
+    static BitList()
+    {
+        static uint CountSetBitsInByte(uint id)
+        {
+            id -= id >> 1 & 0x55;
+            id = (id & 0x33) + (id >> 2 & 0x33);
+            return id + (id >> 4) & 0xF;
+        }
+
+        BitList.rankLookupTable = (byte*)NativeMemory.Alloc((nuint)256);
+        for (var i = 0; i < 256; i++)
+            BitList.rankLookupTable[i] = (byte)CountSetBitsInByte((uint)i);
+        BitList.highBitRanks = (byte*)NativeMemory.Alloc((nuint)(256u * 8u));
+        var pHighRanks = BitList.highBitRanks;
+        for (var i = 0; i < 256; i++)
+        {
+            var z = 0;
+            for (var j = 0; j < 8; j++)
+                if ((i & (1 << j)) != 0)
+                {
+                    *pHighRanks++ = (byte)j;
+                    z++;
+                }
+
+            while (z++ < 8)
+                *pHighRanks++ = 255;
+        }
+    }
+
+    public const int StepSelectTable = 128;
+    public const int StepSelectTableBitCount = 7;
+    public const int MaskStepSelectTable = 0x7F;
+
+    public static void Insert0(ref uint buffer) => buffer >>= 1;
+
+    public static void Insert1(ref uint buffer) => buffer = buffer >> 1 | 0x80000000;
+}
+
+public unsafe class BitList<T> : IReadOnlyList<T>, IDisposable where T : unmanaged, INumberBase<T>
+{
+    public IEnumerator<T> GetEnumerator()
+    {
+        throw new NotImplementedException();
+    }
+
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+    public int Count { get; }
+
+    public T this[int index] => throw new NotImplementedException();
+    
+    /// <summary>
+    /// Each bit represents either to increase the counter "0" or that there exists a value equal to counter "1"
+    /// </summary>
+    public uint* ValuePresentFlags => this.valuePresentFlags;
+
+    private readonly ulong keyCount;
+    private readonly ulong maxValue;
+
+    /// <summary>
+    /// Each bit represents either to increase the counter "0" or that there exists a value equal to counter "1"
+    /// </summary>
+    private readonly uint* valuePresentFlags;
+
+    public void Dispose()
+    {
+        GC.SuppressFinalize(this);
+        this.Dispose(true);
+    }
+
+    private void Dispose(bool isDisposing)
+    {
+        if (isDisposing)
+        {
+            this.valueIndex?.Dispose();
+            this.positionIndex?.Dispose();
+        }
+
+        if (this.valuePresentFlags != null)
+            NativeMemory.Free(this.valuePresentFlags);
+    }
+
+    private readonly CompressedRank<ulong>? valueIndex;
+    private readonly CompressedRank<ulong>? positionIndex;
+
+    ~BitList() => this.Dispose(false);
+
+    public BitList(T[] keys, bool isIndexedByValue, bool isIndexedByPosition) 
+        : this(keys, 
+               isIndexedByValue ? CompressedRank<uint>.FindBestSize(ulong.CreateChecked(keys[^1]) / BitList.StepSelectTable, (ulong)keys.Length, true, false, false) : null,
+               isIndexedByPosition ? CompressedRank<uint>.FindBestSize((ulong) keys.Length / BitList.StepSelectTable, ulong.CreateChecked(keys[^1]), true, false, false) : null)
+    { }
+
+    public BitList(T[] keys, (int, ulong, ulong)[]? valueIndexSizes = null, (int, ulong, ulong)[]? positionIndexSizes = null, int subIndex = 0)
+    {
+        fixed (T* pKeys = keys)
+        {
+            this.keyCount = (ulong)keys.LongLength;
+            Generate(pKeys, this.keyCount, valueIndexSizes, positionIndexSizes, subIndex, out this.maxValue, out this.valuePresentFlags, out this.valueIndex, out this.positionIndex);
+        }
+
+    }
+
+    private static void Generate(T* keys, ulong keyCount, (int, ulong, ulong)[]? valueIndexSizes, (int, ulong, ulong)[]? positionIndexSizes, int subIndexNumber, out ulong maxValue, out uint* valuePresentFlags, out CompressedRank<ulong>? valueIndex, out this.valueIndex, out this.positionIndex)
+    {
+        uint buffer = 0;
+        if (keyCount == 0)
+        {
+            maxValue = 0;
+            valuePresentFlags = null;
+            subIndex = null;
+            return;
+        }
+
+        maxValue = keys[keyCount - 1];
+        var bitCount = keyCount + maxValue;
+        var flagsSize = (nuint)(bitCount + 0x1f >> 5);
+
+        valuePresentFlags = (uint*)NativeMemory.Alloc(flagsSize, (nuint)sizeof(uint));
+        var vpf = valuePresentFlags;
+        int SetFlags(ulong max)
+        {
+            var flagIndex = 0;
+            for (ulong currentValue = 0, keyIndex = 0; ;)
+            {
+                while (keys[keyIndex] == currentValue)
+                {
+                    Select.Insert1(ref buffer);
+                    flagIndex++;
+
+                    if ((flagIndex & 0x1f) == 0)
+                        vpf[(flagIndex >> 5) - 1] = buffer; // (idx >> 5) = idx/32
+                    keyIndex++;
+
+                    if (keyIndex == keyCount)
+                        return flagIndex;
+                }
+
+                if (currentValue == max)
+                    break;
+
+                while (keys[keyIndex] > currentValue)
+                {
+                    Select.Insert0(ref buffer);
+                    flagIndex++;
+
+                    if ((flagIndex & 0x1f) == 0) // (idx & 0x1f) = idx % 32
+                        vpf[(flagIndex >> 5) - 1] = buffer; // (idx >> 5) = idx/32
+                    currentValue++;
+                }
+            }
+
+            return flagIndex;
+        }
+
+        var flagIndex = SetFlags(maxValue);
+
+        if ((flagIndex & 0x1f) != 0)
+        {
+            buffer >>= 0x20 - (flagIndex & 0x1f);
+            valuePresentFlags[flagIndex - 1 >> 5] = buffer;
+        }
+
+        if (sizes == null || keyCount < stepSelectTable)
+        {
+            subIndex = null;
+            return;
+        }
+
+        //if (skipTableSize <= subRangeSize)
+        //{
+        //    valueSkipTable = (byte*) NativeMemory.Alloc(skipTableSize);
+        //    GenerateSkipTable(valuePresentFlags, valueSkipTable, keyCount, (uint) skipEntrySize, out skipEntryMask);
+        //    subIndex = null;
+        //}
+        //else
+        //{
+
+        var bitsTable = (byte*)valuePresentFlags;
+        var skipTableIndex = 0u;
+        var skips = new ulong[keyCount >> stepSelectTableBitCount];
+        ulong keyIndex = stepSelectTable;
+        var valueArrayIndex = 0ul;
+        var currentIndex = 0ul;
+        while (keyIndex < keyCount)
+        {
+            ulong lastIndex;
+            do
+            {
+                lastIndex = currentIndex;
+                currentIndex += Select.rankLookupTable[bitsTable[valueArrayIndex++]];
+            } while (currentIndex <= keyIndex);
+            skips[skipTableIndex++] = Select.highBitRanks[bitsTable[valueArrayIndex - 1] * 8 + (int)(keyIndex - lastIndex)] + (valueArrayIndex - 1 << 3);
+
+            keyIndex += stepSelectTable;
+        }
+
+        subIndex = new(skips, sizes, subIndexNumber + 1);
+        //}
+    }
 }

@@ -272,31 +272,48 @@ public sealed unsafe class CompressedRank<T> : IDisposable, IEnumerable<T>
         if (valueIndex > this.maxValue)
             return this.count;
 
-        // TODO: get both versions
-
         var valueSignificant = valueIndex >> (int)this.remainderBitLength;
         var remainderMask = (1u << (int)this.remainderBitLength) - 1u;
         var valueRemainder = valueIndex & remainderMask;
         uint rank, selRes;
-        if (valueSignificant == 0)
+
+        if (this.count <= this.maxValue)
         {
-            selRes = 0;
-            rank = 0;
+            selRes = (uint)(this.sel.GetBitIndexOfValue(valueSignificant) - 1);
+            rank = selRes - valueSignificant;
+
+            for (; ; )
+            {
+                if (BitBool.GetBit32((byte*)this.sel.ValuePresentFlags, (int)selRes) != 1
+                    || BitBool.GetBitsValue(this.valueRemainders, rank, this.remainderBitLength, remainderMask) >=
+                    valueRemainder)
+                    break;
+                selRes++;
+                rank++;
+            }
         }
         else
         {
-            selRes = (uint)(this.sel.GetBitIndex(valueSignificant - 1) + 0);
-            rank = selRes - valueSignificant;
-        }
+            if (valueSignificant == 0)
+            {
+                selRes = 0;
+                rank = 0;
+            }
+            else
+            {
+                selRes = (uint)(this.sel.GetBitIndex(valueSignificant - 1) + 1);
+                rank = selRes - valueSignificant;
+            }
 
-        for (; ; )
-        {
-            if (BitBool.GetBit32((byte*)this.sel.ValuePresentFlags, (int)selRes) != 0
-                || BitBool.GetBitsValue(this.valueRemainders, rank, this.remainderBitLength, remainderMask) >=
-                valueRemainder)
-                break;
-            selRes++;
-            rank++;
+            for (; ; )
+            {
+                if (BitBool.GetBit32((byte*)this.sel.ValuePresentFlags, (int)selRes) != 0
+                    || BitBool.GetBitsValue(this.valueRemainders, rank, this.remainderBitLength, remainderMask) >=
+                    valueRemainder)
+                    break;
+                selRes++;
+                rank++;
+            }
         }
 
         return rank;
@@ -319,7 +336,7 @@ public sealed unsafe class CompressedRank<T> : IDisposable, IEnumerable<T>
                 return value;
         }
 
-        return T.CreateChecked((this.sel.GetStoredValue(valueIndex)) << (int)this.remainderBitLength) + value;
+        return T.CreateChecked((this.sel.GetValueAtIndex(valueIndex)) << (int)this.remainderBitLength) + value;
     }
 
     public void Write(BinaryWriter writer, bool writeSizes = true)
