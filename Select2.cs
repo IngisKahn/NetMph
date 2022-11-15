@@ -120,7 +120,7 @@ public sealed unsafe class Select : IDisposable, IEnumerable<uint>
     ~Select() => this.Dispose(false);
 
     public Select(ulong[] keys, bool isIndexable) : this(keys, isIndexable ? CompressedRank<uint>.FindBestSize((ulong)keys.Length, (ulong)keys[^1], true, false, false) : null)
-    {}
+    { }
 
     public Select(ulong[] keys, (int, ulong, ulong)[]? sizes = null, int subIndex = 0)
     {
@@ -231,27 +231,27 @@ public sealed unsafe class Select : IDisposable, IEnumerable<uint>
         //}
         //else
         //{
-            
-            var bitsTable = (byte*)valuePresentFlags;
-            var skipTableIndex = 0u;
-            var skips = new ulong[keyCount >> stepSelectTableBitCount];
-            ulong keyIndex = stepSelectTable;
-            var valueArrayIndex = 0ul;
-            var currentIndex = 0ul;
-            while (keyIndex < keyCount)
-            {
-                ulong lastIndex;
-                do
-                {
-                    lastIndex = currentIndex;
-                    currentIndex += Select.rankLookupTable[bitsTable[valueArrayIndex++]];
-                } while (currentIndex <= keyIndex);
-                skips[skipTableIndex++] = Select.highBitRanks[bitsTable[valueArrayIndex - 1] * 8 + (int)(keyIndex - lastIndex)] + (valueArrayIndex - 1 << 3);
-                
-                keyIndex += stepSelectTable;
-            }
 
-            subIndex = new(skips, sizes, subIndexNumber + 1);
+        var bitsTable = (byte*)valuePresentFlags;
+        var skipTableIndex = 0u;
+        var skips = new ulong[keyCount >> stepSelectTableBitCount];
+        ulong keyIndex = stepSelectTable;
+        var valueArrayIndex = 0ul;
+        var currentIndex = 0ul;
+        while (keyIndex < keyCount)
+        {
+            ulong lastIndex;
+            do
+            {
+                lastIndex = currentIndex;
+                currentIndex += Select.rankLookupTable[bitsTable[valueArrayIndex++]];
+            } while (currentIndex <= keyIndex);
+            skips[skipTableIndex++] = Select.highBitRanks[bitsTable[valueArrayIndex - 1] * 8 + (int)(keyIndex - lastIndex)] + (valueArrayIndex - 1 << 3);
+
+            keyIndex += stepSelectTable;
+        }
+
+        subIndex = new(skips, sizes, subIndexNumber + 1);
         //}
     }
 
@@ -496,6 +496,204 @@ public sealed unsafe class Select : IDisposable, IEnumerable<uint>
     public IEnumerator<uint> GetEnumerator() => new SelectEnumerator(this.valuePresentFlags, this.keyCount);
 }
 
+[Flags]
+public enum IndexOptions : byte
+{
+    None,
+    ByPosition,
+    ByValue,
+}
+
+[Flags]
+public enum DataOptions : byte
+{
+    None,
+    IncludeCount,
+    IncludeMaxValue
+}
+
+internal unsafe class CompactRank
+{
+    private static uint SevenBitIntegerSize(ulong value) => value switch
+    {
+        < 1ul << 7 => 1,
+        < 1ul << 14 => 2,
+        < 1ul << 21 => 3,
+        < 1ul << 28 => 4,
+        < 1ul << 35 => 5,
+        < 1ul << 42 => 6,
+        < 1ul << 49 => 7,
+        < 1ul << 56 => 8,
+        < 1ul << 63 => 9,
+        _ => 10
+    };
+
+    public record BestSize(int RemainderBitCount, ulong SizeInBytes, ulong SizeInBits)
+    {
+        public BestSize? IndexByPosition { get; init; }
+        public BestSize? IndexByValue { get; init; }
+    }
+
+    public static BestSize FindBestSize(ulong count, ulong maxValue, IndexOptions indexOptions = IndexOptions.ByValue, DataOptions dataOptions = DataOptions.IncludeCount | DataOptions.IncludeMaxValue)
+    {
+        if (count > maxValue)
+            (count, maxValue) = (maxValue, count);
+
+        BestSize ComputeSize(int r)
+        {
+            var s = count * (ulong)r;
+            var newMax = maxValue >> r;
+            if (newMax == 0)
+                return new(r, (s + 7) >> 3, s);
+            s += count + newMax;
+            if (count <= 128 || indexOptions == IndexOptions.None)
+                return new(r, (s + 7) >> 3, s);
+            BestSize? indexByValueSize;
+            if (indexOptions.HasFlag(IndexOptions.ByPosition))
+            {
+                var indexByPositionSize = FindBestSize(count / 128, newMax + count / 128, IndexOptions.ByPosition, 0);
+                s += indexByPositionSize.SizeInBits;
+
+                if (!indexOptions.HasFlag(IndexOptions.ByValue))
+                    return new(r, (s + 7) >> 3, s) { IndexByPosition = indexByPositionSize };
+
+                indexByValueSize = FindBestSize(newMax / 128, newMax / 128 + count, IndexOptions.ByValue, 0);
+                s += indexByValueSize.SizeInBits;
+                return new(r, (s + 7) >> 3, s)
+                { IndexByPosition = indexByPositionSize, IndexByValue = indexByValueSize };
+            }
+
+            indexByValueSize = FindBestSize(newMax / 128, newMax / 128 + count, IndexOptions.ByValue, 0);
+            s += indexByValueSize.SizeInBits;
+            return new(r, (s + 7) >> 3, s) { IndexByValue = indexByValueSize };
+        }
+
+        var remainder = (int)ulong.Log2(maxValue) + 1;
+        var guess = (int)ulong.Log2(maxValue / count);
+        var a = -1;
+        var d = remainder + 1;
+        var b = Math.Min(guess + 1, remainder);
+        var c = Math.Max(guess - 1, 0);
+        var bValue = ComputeSize(b);
+        var cValue = ComputeSize(c);
+
+        BestSize? result = null;
+        do
+        {
+            switch (bValue.SizeInBits.CompareTo(cValue.SizeInBits))
+            {
+                case -1:
+                    if (b + 1 >= c) // touching tips
+                    {
+                        if (a + 1 == b) // nothing to the left
+                        {
+                            result = bValue;
+                            break;
+                        }
+
+                        // move left over b
+                        d = c;
+                        c = b;
+                        cValue = bValue;
+
+                        b = a + ((c - a) >> 1);
+                        bValue = ComputeSize(b);
+                    }
+                    else // normal case, move right side in
+                    {
+                        d = c;
+                        c = b + ((d - b) >> 1);
+                        cValue = ComputeSize(c);
+                    }
+                    break;
+                case 1:
+                    if (b + 1 == c) // touching tips
+                    {
+                        if (c + 1 == d) // nothing to the right
+                        {
+                            result = cValue;
+                            break;
+                        }
+
+                        // move right over c
+                        a = b;
+                        b = c;
+                        bValue = cValue;
+
+                        c = b + ((d - b) >> 1);
+                        cValue = ComputeSize(c);
+                    }
+                    else // normal case, move left side in
+                    {
+                        a = b;
+                        b = a + ((c - a) >> 1);
+                        bValue = ComputeSize(b);
+                    }
+                    break;
+                default: // equal values, need to move both sides in
+                    if (b + 1 == c) // touching tips, right wins
+                    {
+                        if (c + 1 == d)
+                            result = cValue;
+                        else
+                        {
+                            a = b;
+                            b = c++;
+                            bValue = cValue;
+                            cValue = ComputeSize(c);
+                        }
+                        break;
+                    }
+                    if (a < b - 1)
+                        a = b;
+                    if (d > c + 1)
+                        d = c;
+                    var diff = (d - a) / 3;
+                    if (diff == 0) // they are only 1 apart, move left over
+                    {
+                        b++;
+                        bValue = ComputeSize(b);
+                        break;
+                    }
+                    b = a + diff;
+                    c = b + diff;
+                    bValue = ComputeSize(b);
+                    cValue = ComputeSize(c);
+                    break;
+            }
+        } while (result == null);
+
+        var size = result.SizeInBits;
+        if (dataOptions.HasFlag(DataOptions.IncludeCount))
+            size += SevenBitIntegerSize(count) << 3;
+        if (dataOptions.HasFlag(DataOptions.IncludeMaxValue))
+            size += SevenBitIntegerSize(maxValue) << 3;
+        return result with { SizeInBits = size, SizeInBytes = (size + 7) >> 3 };
+    }
+}
+
+public unsafe class CompactRank<T> : IReadOnlyList<T>, IDisposable where T : unmanaged, INumberBase<T>
+{
+    public IEnumerator<T> GetEnumerator()
+    {
+        throw new NotImplementedException();
+    }
+
+    IEnumerator IEnumerable.GetEnumerator()
+    {
+        return GetEnumerator();
+    }
+
+    public int Count { get; }
+
+    public T this[int index] => throw new NotImplementedException();
+
+    public void Dispose()
+    {
+        throw new NotImplementedException();
+    }
+}
+
 internal static unsafe class BitList
 {
     private static readonly byte* rankLookupTable;
@@ -538,7 +736,7 @@ internal static unsafe class BitList
     public static void Insert1(ref uint buffer) => buffer = buffer >> 1 | 0x80000000;
 }
 
-public unsafe class BitList<T> : IReadOnlyList<T>, IDisposable where T : unmanaged, INumberBase<T>
+public unsafe class BitList<T> : IReadOnlyList<T>, IDisposable where T : unmanaged, INumberBase<T>, IConvertible
 {
     public IEnumerator<T> GetEnumerator()
     {
@@ -550,7 +748,7 @@ public unsafe class BitList<T> : IReadOnlyList<T>, IDisposable where T : unmanag
     public int Count { get; }
 
     public T this[int index] => throw new NotImplementedException();
-    
+
     /// <summary>
     /// Each bit represents either to increase the counter "0" or that there exists a value equal to counter "1"
     /// </summary>
@@ -582,39 +780,39 @@ public unsafe class BitList<T> : IReadOnlyList<T>, IDisposable where T : unmanag
             NativeMemory.Free(this.valuePresentFlags);
     }
 
-    private readonly CompressedRank<ulong>? valueIndex;
-    private readonly CompressedRank<ulong>? positionIndex;
+    private readonly CompactRank<ulong>? valueIndex;
+    private readonly CompactRank<ulong>? positionIndex;
 
     ~BitList() => this.Dispose(false);
 
-    public BitList(T[] keys, bool isIndexedByValue, bool isIndexedByPosition) 
-        : this(keys, 
-               isIndexedByValue ? CompressedRank<uint>.FindBestSize(ulong.CreateChecked(keys[^1]) / BitList.StepSelectTable, (ulong)keys.Length, true, false, false) : null,
-               isIndexedByPosition ? CompressedRank<uint>.FindBestSize((ulong) keys.Length / BitList.StepSelectTable, ulong.CreateChecked(keys[^1]), true, false, false) : null)
+    public BitList(T[] keys, IndexOptions indexOptions = IndexOptions.ByPosition)
+        : this(keys,
+               indexOptions.HasFlag(IndexOptions.ByValue) ? CompactRank.FindBestSize(keys[^1].ToUInt64(null) / BitList.StepSelectTable, (ulong)keys.Length, IndexOptions.ByValue, 0) : null,
+               indexOptions.HasFlag(IndexOptions.ByPosition) ? CompactRank.FindBestSize((ulong)keys.Length / BitList.StepSelectTable, keys[^1].ToUInt64(null), IndexOptions.ByPosition, 0) : null)
     { }
 
-    public BitList(T[] keys, (int, ulong, ulong)[]? valueIndexSizes = null, (int, ulong, ulong)[]? positionIndexSizes = null, int subIndex = 0)
+    internal BitList(T[] keys, CompactRank.BestSize? valueIndexSizes = null, CompactRank.BestSize? positionIndexSizes = null)
     {
         fixed (T* pKeys = keys)
         {
             this.keyCount = (ulong)keys.LongLength;
-            Generate(pKeys, this.keyCount, valueIndexSizes, positionIndexSizes, subIndex, out this.maxValue, out this.valuePresentFlags, out this.valueIndex, out this.positionIndex);
+            Generate(pKeys, this.keyCount, valueIndexSizes, positionIndexSizes, out this.maxValue, out this.valuePresentFlags, out this.valueIndex, out this.positionIndex);
         }
 
     }
 
-    private static void Generate(T* keys, ulong keyCount, (int, ulong, ulong)[]? valueIndexSizes, (int, ulong, ulong)[]? positionIndexSizes, int subIndexNumber, out ulong maxValue, out uint* valuePresentFlags, out CompressedRank<ulong>? valueIndex, out this.valueIndex, out this.positionIndex)
+    private static void Generate(T* keys, ulong keyCount, CompactRank.BestSize? valueIndexSizes, CompactRank.BestSize? positionIndexSizes, out ulong maxValue, out uint* valuePresentFlags, out CompactRank<ulong>? valueIndex, out CompactRank<ulong>? positionIndex)
     {
         uint buffer = 0;
         if (keyCount == 0)
         {
             maxValue = 0;
             valuePresentFlags = null;
-            subIndex = null;
+            valueIndex = positionIndex = null;
             return;
         }
 
-        maxValue = keys[keyCount - 1];
+        maxValue = keys[keyCount - 1].ToUInt64(null);
         var bitCount = keyCount + maxValue;
         var flagsSize = (nuint)(bitCount + 0x1f >> 5);
 
@@ -625,9 +823,9 @@ public unsafe class BitList<T> : IReadOnlyList<T>, IDisposable where T : unmanag
             var flagIndex = 0;
             for (ulong currentValue = 0, keyIndex = 0; ;)
             {
-                while (keys[keyIndex] == currentValue)
+                while (keys[keyIndex].ToUInt64(null) == currentValue)
                 {
-                    Select.Insert1(ref buffer);
+                    BitList.Insert1(ref buffer);
                     flagIndex++;
 
                     if ((flagIndex & 0x1f) == 0)
@@ -641,9 +839,9 @@ public unsafe class BitList<T> : IReadOnlyList<T>, IDisposable where T : unmanag
                 if (currentValue == max)
                     break;
 
-                while (keys[keyIndex] > currentValue)
+                while (keys[keyIndex].ToUInt64(null) > currentValue)
                 {
-                    Select.Insert0(ref buffer);
+                    BitList.Insert0(ref buffer);
                     flagIndex++;
 
                     if ((flagIndex & 0x1f) == 0) // (idx & 0x1f) = idx % 32
@@ -663,21 +861,12 @@ public unsafe class BitList<T> : IReadOnlyList<T>, IDisposable where T : unmanag
             valuePresentFlags[flagIndex - 1 >> 5] = buffer;
         }
 
-        if (sizes == null || keyCount < stepSelectTable)
+        if (valueIndexSizes == null && positionIndexSizes == null || keyCount < BitList.StepSelectTable)
         {
-            subIndex = null;
+            positionIndex = valueIndex = null;
             return;
         }
-
-        //if (skipTableSize <= subRangeSize)
-        //{
-        //    valueSkipTable = (byte*) NativeMemory.Alloc(skipTableSize);
-        //    GenerateSkipTable(valuePresentFlags, valueSkipTable, keyCount, (uint) skipEntrySize, out skipEntryMask);
-        //    subIndex = null;
-        //}
-        //else
-        //{
-
+        
         var bitsTable = (byte*)valuePresentFlags;
         var skipTableIndex = 0u;
         var skips = new ulong[keyCount >> stepSelectTableBitCount];
