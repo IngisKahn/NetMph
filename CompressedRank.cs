@@ -9,6 +9,15 @@ public sealed unsafe class CompressedRank<T> : IDisposable, IEnumerable<T>
               IConvertible,
               IBinaryInteger<T>
 {
+    TFloat ProductLog<TFloat>(TFloat value) where TFloat : IFloatingPoint<TFloat>
+    {
+        var lowerBound = TFloat.CreateChecked(1.38f);
+        var upperBound = TFloat.CreateChecked(236);
+        if (value < lowerBound || value >= upperBound)
+            throw new ArgumentOutOfRangeException(nameof(value), $"Value must be between 1.38 and 236");
+
+        return default;
+    }
     //public static uint SizeEstimate(T count, T maxValue, bool isIndexable = true, bool includeSize = true)
     //{
     //    if (count > maxValue)
