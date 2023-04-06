@@ -1,63 +1,9 @@
-﻿using System.Numerics;
-using System.Runtime.InteropServices;
+﻿namespace NetMph.ProductLog;
 
-namespace NetMph.ProductLog;
-
-
-internal interface IPolynomial1
-{
-    static abstract double Coefficient { get; }
-}
-internal interface IPolynomial2
-{
-    static abstract double Coefficient(double x);
-}
-
-internal class BranchPoint0 : IPolynomial1 { public static double Coefficient => -1; }
-internal class BranchPoint1 : IPolynomial1 { public static double Coefficient => 1; }
-internal class BranchPoint2 : IPolynomial1 { public static double Coefficient => -0.333333333333333333e0; }
-internal class BranchPoint3 : IPolynomial1 { public static double Coefficient => 0.152777777777777777e0; }
-internal class BranchPoint4 : IPolynomial1 { public static double Coefficient => -0.79629629629629630e-1; }
-internal class BranchPoint5 : IPolynomial1 { public static double Coefficient => 0.44502314814814814e-1; }
-internal class BranchPoint6 : IPolynomial1 { public static double Coefficient => -0.25984714873603760e-1; }
-internal class BranchPoint7 : IPolynomial1 { public static double Coefficient => 0.15635632532333920e-1; }
-internal class BranchPoint8 : IPolynomial1 { public static double Coefficient => -0.96168920242994320e-2; }
-internal class BranchPoint9 : IPolynomial1 { public static double Coefficient => 0.60145432529561180e-2; }
-internal class BranchPoint10 : IPolynomial1 { public static double Coefficient => -0.38112980348919993e-2; }
-internal class BranchPoint11 : IPolynomial1 { public static double Coefficient => 0.24408779911439826e-2; }
-internal class BranchPoint12 : IPolynomial1 { public static double Coefficient => -0.15769303446867841e-2; }
-internal class BranchPoint13 : IPolynomial1 { public static double Coefficient => 0.10262633205076071e-2; }
-internal class BranchPoint14 : IPolynomial1 { public static double Coefficient => -0.67206163115613620e-3; }
-internal class BranchPoint15 : IPolynomial1 { public static double Coefficient => 0.44247306181462090e-3; }
-internal class BranchPoint16 : IPolynomial1 { public static double Coefficient => -0.29267722472962746e-3; }
-internal class BranchPoint17 : IPolynomial1 { public static double Coefficient => 0.19438727605453930e-3; }
-internal class BranchPoint18 : IPolynomial1 { public static double Coefficient => -0.12957426685274883e-3; }
-internal class BranchPoint19 : IPolynomial1 { public static double Coefficient => 0.86650358052081260e-4; }
-internal class AsymptoticPolynomialB2X0 : IPolynomial1 { public static double Coefficient => 0; }
-internal class AsymptoticPolynomialB2X1 : IPolynomial1 { public static double Coefficient => -1; }
-internal class AsymptoticPolynomialB2X2 : IPolynomial1 { public static double Coefficient => 1d / 2; }
-internal class AsymptoticPolynomialB3X0 : IPolynomial1 { public static double Coefficient => 0; }
-internal class AsymptoticPolynomialB3X1 : IPolynomial1 { public static double Coefficient => 1; }
-internal class AsymptoticPolynomialB3X2 : IPolynomial1 { public static double Coefficient => -3d / 2; }
-internal class AsymptoticPolynomialB3X3 : IPolynomial1 { public static double Coefficient => 1d / 3; }
-internal class AsymptoticPolynomialB4X0 : IPolynomial1 { public static double Coefficient => 0; }
-internal class AsymptoticPolynomialB4X1 : IPolynomial1 { public static double Coefficient => -1; }
-internal class AsymptoticPolynomialB4X2 : IPolynomial1 { public static double Coefficient => 3; }
-internal class AsymptoticPolynomialB4X3 : IPolynomial1 { public static double Coefficient => -11d / 6; }
-internal class AsymptoticPolynomialB4X4 : IPolynomial1 { public static double Coefficient => 1d / 4; }
-internal class AsymptoticPolynomialB5X0 : IPolynomial1 { public static double Coefficient => 0; }
-internal class AsymptoticPolynomialB5X1 : IPolynomial1 { public static double Coefficient => 1; }
-internal class AsymptoticPolynomialB5X2 : IPolynomial1 { public static double Coefficient => -5; }
-internal class AsymptoticPolynomialB5X3 : IPolynomial1 { public static double Coefficient => 35d / 6; }
-internal class AsymptoticPolynomialB5X4 : IPolynomial1 { public static double Coefficient => -25d / 12; }
-internal class AsymptoticPolynomialB5X5 : IPolynomial1 { public static double Coefficient => 1d / 5; }
-internal class AsymptoticPolynomialA0 : IPolynomial2 { public static double Coefficient(double y) => -y; }
-internal class AsymptoticPolynomialA1 : IPolynomial2 { public static double Coefficient(double y) => y; }
-
-internal class AsymptoticPolynomialA2 : IPolynomial2 { public static double Coefficient(double y) => (y / 2 - 1) * y; }
-internal class AsymptoticPolynomialA3 : IPolynomial2 { public static double Coefficient(double y) => ((y / 3 - 3d / 2) * y + 1) * y; }
-internal class AsymptoticPolynomialA4 : IPolynomial2 { public static double Coefficient(double y) => (((y / 4 - 11d / 6) * y + 3) * y - 1) * y; }
-internal class AsymptoticPolynomialA5 : IPolynomial2 { public static double Coefficient(double y) => ((((y / 5 - 25d / 12) * y + 35d / 6) * y - 5) * y + 1) * y; }
+internal static class AsymptoticPolynomialA2 { public static double Coefficient(double y) => (y / 2 - 1) * y; }
+internal static class AsymptoticPolynomialA3 { public static double Coefficient(double y) => ((y / 3 - 3d / 2) * y + 1) * y; }
+internal static class AsymptoticPolynomialA4 { public static double Coefficient(double y) => (((y / 4 - 11d / 6) * y + 3) * y - 1) * y; }
+internal static class AsymptoticPolynomialA5 { public static double Coefficient(double y) => ((((y / 5 - 25d / 12) * y + 35d / 6) * y - 5) * y + 1) * y; }
 
 internal static class Branch0
 {
