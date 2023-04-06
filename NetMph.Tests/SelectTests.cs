@@ -88,6 +88,55 @@ public class SelectTests
         }
     }
 
-    //[Fact]
+    [Fact]
+    public void Test1()
+    {
+        using Select s = new(
+            new ulong[]
+            {
+                2, 2
+            });
+        var q = s.GetBitIndexOfValue(2);
+        Assert.Equal(2u, q);
+
+    }
+
+    [Fact]
+    public void Test2()
+    {
+        using Select s = new(
+            new ulong[]
+            {
+                1, 2
+            });
+        var q = s.GetBitIndexOfValue(2);
+        Assert.Equal(2u, q);
+
+    }
+
+    [Fact]
+    public void Test3()
+    {
+        using Select s = new(
+            new ulong[]
+            {
+                2, 4,4,6
+            });
+        var q = s.GetBitIndexOfValue(1);
+        Assert.Equal(0u, q);
+        q = s.GetBitIndexOfValue(2);
+        Assert.Equal(1u, q);
+        q = s.GetBitIndexOfValue(3);
+        Assert.Equal(1u, q);
+        q = s.GetBitIndexOfValue(4);
+        Assert.Equal(3u, q);
+        q = s.GetBitIndexOfValue(5);
+        Assert.Equal(3u, q);
+        q = s.GetBitIndexOfValue(6);
+        Assert.Equal(4u, q);
+        q = s.GetBitIndexOfValue(7);
+        Assert.Equal(4u, q);
+
+    }
 
 }

@@ -9,15 +9,6 @@ public sealed unsafe class CompressedRank<T> : IDisposable, IEnumerable<T>
               IConvertible,
               IBinaryInteger<T>
 {
-    TFloat ProductLog<TFloat>(TFloat value) where TFloat : IFloatingPoint<TFloat>
-    {
-        var lowerBound = TFloat.CreateChecked(1.38f);
-        var upperBound = TFloat.CreateChecked(236);
-        if (value < lowerBound || value >= upperBound)
-            throw new ArgumentOutOfRangeException(nameof(value), $"Value must be between 1.38 and 236");
-
-        return default;
-    }
     //public static uint SizeEstimate(T count, T maxValue, bool isIndexable = true, bool includeSize = true)
     //{
     //    if (count > maxValue)
@@ -276,19 +267,19 @@ public sealed unsafe class CompressedRank<T> : IDisposable, IEnumerable<T>
         this.sel = new(reader, isIndexable);
     }
 
-    public ulong GetRank(uint valueIndex)
+    public ulong GetRank(uint value)
     {
-        if (valueIndex > this.maxValue)
+        if (value > this.maxValue)
             return this.count;
 
-        var valueSignificant = valueIndex >> (int)this.remainderBitLength;
+        var valueSignificant = value >> (int)this.remainderBitLength;
         var remainderMask = (1u << (int)this.remainderBitLength) - 1u;
-        var valueRemainder = valueIndex & remainderMask;
+        var valueRemainder = value & remainderMask;
         uint rank, selRes;
 
         if (this.count <= this.maxValue)
         {
-            selRes = (uint)(this.sel.GetBitIndexOfValue(valueSignificant) - 1);
+            selRes = (uint)(this.sel.GetBitIndexOfValue(valueSignificant) + 1);
             rank = selRes - valueSignificant;
 
             for (; ; )
