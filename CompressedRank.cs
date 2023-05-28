@@ -4,6 +4,13 @@ using System.Runtime.InteropServices;
 
 namespace NetMph;
 
+public enum IndexingType
+{
+    None,
+    ByPosition,
+    ByPositionOrValue
+}
+
 public sealed unsafe class CompressedRank<T> : IDisposable, IEnumerable<T>
     where T : unmanaged,
               IConvertible,
@@ -19,7 +26,7 @@ public sealed unsafe class CompressedRank<T> : IDisposable, IEnumerable<T>
     //    if (includeSize)
     //        size += SevenBitIntegerSize(count) + SevenBitIntegerSize(maxValue);
 
-    //    return size + Select.SizeEstimate(count.ToUInt32(null), maxValue.ToUInt32(null), isIndexable, false);
+    //    return size + BitCounter.SizeEstimate(count.ToUInt32(null), maxValue.ToUInt32(null), isIndexable, false);
     //}
 
     // I give up trying to find the derivative of a non-continuous recursive function
@@ -172,10 +179,10 @@ public sealed unsafe class CompressedRank<T> : IDisposable, IEnumerable<T>
     private readonly ulong maxValue;
     private readonly ulong count;
     private readonly uint remainderBitLength;
-    private readonly Select sel;
+    private readonly BitCounter sel;
     private readonly ulong* valueRemainders;
 
-    private static void Initialize(IReadOnlyList<T> values, bool isIndexable, Func<ulong, ulong, bool, (int, ulong, ulong)[]> findBestSizes, int subIndex, out ulong count, out ulong maxValue, out uint remainderBitLength, out ulong* valueRemainders, out Select select)
+    private static void Initialize(IReadOnlyList<T> values, bool isIndexable, Func<ulong, ulong, bool, (int, ulong, ulong)[]> findBestSizes, int subIndex, out ulong count, out ulong maxValue, out uint remainderBitLength, out ulong* valueRemainders, out BitCounter bitCounter)
     {
         count = (ulong)values.Count;
         maxValue = values[^1].ToUInt64(null);
@@ -245,7 +252,7 @@ public sealed unsafe class CompressedRank<T> : IDisposable, IEnumerable<T>
                     selectVector[i] = values[(int)i].ToUInt32(null);
         }
 
-        select = new(selectVector, isIndexable ? bestSizes : null, subIndex + 1);
+        bitCounter = new(selectVector, isIndexable ? bestSizes : null, subIndex + 1);
     }
 
     public CompressedRank(IReadOnlyList<T> values, bool isIndexable = true) // must be a sorted list of values
@@ -284,7 +291,7 @@ public sealed unsafe class CompressedRank<T> : IDisposable, IEnumerable<T>
 
             for (; ; )
             {
-                if (BitBool.GetBit32((byte*)this.sel.ValuePresentFlags, (int)selRes) != 1
+                if (BitBool.GetBit32((byte*)this.sel.BitList, (int)selRes) != 1
                     || BitBool.GetBitsValue(this.valueRemainders, rank, this.remainderBitLength, remainderMask) >=
                     valueRemainder)
                     break;
@@ -307,7 +314,7 @@ public sealed unsafe class CompressedRank<T> : IDisposable, IEnumerable<T>
 
             for (; ; )
             {
-                if (BitBool.GetBit32((byte*)this.sel.ValuePresentFlags, (int)selRes) != 0
+                if (BitBool.GetBit32((byte*)this.sel.BitList, (int)selRes) != 0
                     || BitBool.GetBitsValue(this.valueRemainders, rank, this.remainderBitLength, remainderMask) >=
                     valueRemainder)
                     break;

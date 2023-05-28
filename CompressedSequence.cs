@@ -14,7 +14,7 @@ IConvertible
     //private readonly uint* lengthRemainders;
     private readonly ulong valueCount;
     //private readonly uint remainderLength;
-    //private readonly Select selectTable;
+    //private readonly BitCounter selectTable;
     private readonly ulong* storeTable;
     private readonly ulong totalBitLength;
     private readonly CompressedRank<ulong> rank;

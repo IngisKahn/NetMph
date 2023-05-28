@@ -3,12 +3,12 @@ using Xunit;
 
 namespace NetMph.Tests;
 
-public class SelectTests
+public class BitCounterTests
 {
     [Fact]
     public void ItRuns()
     {
-        using Select s = new(
+        using BitCounter s = new(
             new ulong[]
             {
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 4, 4,
@@ -21,7 +21,7 @@ public class SelectTests
     [Fact]
     public void GetFirstNonZeroValue()
     {
-        using Select s = new(
+        using BitCounter s = new(
             new ulong[]
             {
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 4, 4,
@@ -34,7 +34,7 @@ public class SelectTests
     [Fact]
     public void GetLastZeroValue()
     {
-        using Select s = new( 
+        using BitCounter s = new( 
             new ulong[]
             {
                     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4,
@@ -52,7 +52,7 @@ public class SelectTests
                 4, 4,
                 4
             };
-        using Select s = new(vals);
+        using BitCounter s = new(vals);
 
         for (var i = 0u; i < vals.Length; i++)
         {
@@ -65,7 +65,7 @@ public class SelectTests
     public void GetRange1to50()
     {
         var vals = Enumerable.Range(1, 50).Select(i => (ulong)i).ToArray();
-        using Select s = new(vals);
+        using BitCounter s = new(vals);
 
         for (var i = 0u; i < vals.Length; i++)
         {
@@ -78,7 +78,7 @@ public class SelectTests
     public void GetRange1to500()
     {
         var vals = Enumerable.Range(1, 500).Select(i => (ulong)i).ToArray();
-        using Select s = new(vals, true);
+        using BitCounter s = new(vals, true);
 
         //for (var i = 0u; i < vals.Length; i++)
         var i = 128u;
@@ -91,7 +91,7 @@ public class SelectTests
     [Fact]
     public void Test1()
     {
-        using Select s = new(
+        using BitCounter s = new(
             new ulong[]
             {
                 2, 2
@@ -104,7 +104,7 @@ public class SelectTests
     [Fact]
     public void Test2()
     {
-        using Select s = new(
+        using BitCounter s = new(
             new ulong[]
             {
                 1, 2
@@ -117,7 +117,7 @@ public class SelectTests
     [Fact]
     public void Test3()
     {
-        using Select s = new(
+        using BitCounter s = new(
             new ulong[]
             {
                 2, 4,4,6
